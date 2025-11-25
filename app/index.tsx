@@ -18,8 +18,6 @@ export default function Index() {
                     router.replace('/(customer)/home');
                 } else if (user?.role === 'mechanic') {
                     router.replace('/(mechanic)/dashboard');
-                } else if (user?.role === 'admin') {
-                    router.replace('/(admin)/dashboard');
                 }
             }
         }

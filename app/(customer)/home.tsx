@@ -1,28 +1,23 @@
-import React, { useEffect, useState } from 'react';
-import {
-    View,
-    Text,
-    StyleSheet,
-    SafeAreaView,
-    ScrollView,
-    TouchableOpacity,
-    RefreshControl,
-} from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, RefreshControl, TouchableOpacity, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Avatar } from '@/components/shared/Avatar';
-import { Card } from '@/components/ui/Card';
 import { useAuthStore } from '@/stores/authStore';
 import { useBookingStore } from '@/stores/bookingStore';
 import { subscribeToActiveBooking } from '@/services/firebase/firestore';
 import { COLORS, SIZES, CATEGORIES } from '@/constants/theme';
 import { ServiceCategory } from '@/types';
+import { Card } from '@/components/ui/Card';
+import { Avatar } from '@/components/shared/Avatar';
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 
 export default function CustomerHome() {
     const router = useRouter();
     const { user } = useAuthStore();
     const { activeBooking, setActiveBooking } = useBookingStore();
     const [refreshing, setRefreshing] = useState(false);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         if (!user) return;
@@ -33,6 +28,9 @@ export default function CustomerHome() {
                 router.push('/(customer)/tracking');
             }
         });
+
+        // Set loading to false once subscription is set up
+        setLoading(false);
 
         return () => unsubscribe();
     }, [user]);
@@ -49,6 +47,14 @@ export default function CustomerHome() {
             params: { category },
         });
     };
+
+    if (loading) {
+        return (
+            <View style={styles.container}>
+                <LoadingSpinner fullScreen />
+            </View>
+        );
+    }
 
     return (
         <SafeAreaView style={styles.container}>

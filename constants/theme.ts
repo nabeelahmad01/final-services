@@ -73,7 +73,7 @@ export const CATEGORIES = [
     {
         id: 'bike_mechanic',
         name: 'Bike Mechanic',
-        icon: 'motorcycle',
+        icon: 'bicycle',
         color: '#FF6F00'
     },
     {

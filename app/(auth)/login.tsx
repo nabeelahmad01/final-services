@@ -1,18 +1,9 @@
-import React, { useState } from 'react';
-import {
-    View,
-    Text,
-    StyleSheet,
-    SafeAreaView,
-    ScrollView,
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-} from 'react-native';
-import { useRouter } from 'expo-router';
+import { useState } from 'react';
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
+import { useRouter } from 'expo-router';
+import { Button, Input } from '@/components';
 import { signIn } from '@/services/firebase/auth';
 import { useAuthStore } from '@/stores/authStore';
 import { COLORS, SIZES } from '@/constants/theme';
@@ -37,7 +28,12 @@ export default function Login() {
             const user = await signIn(email, password);
             setUser(user);
 
-            // Navigation will be handled by index.tsx based on user role
+            // Navigate based on user role
+            if (user.role === 'customer') {
+                router.replace('/(customer)/home');
+            } else if (user.role === 'mechanic') {
+                router.replace('/(mechanic)/dashboard');
+            }
         } catch (error: any) {
             Alert.alert('Login Failed', error.message);
         } finally {

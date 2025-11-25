@@ -67,13 +67,14 @@ export interface ServiceRequest {
 export interface Proposal {
     id: string;
     requestId: string;
+    customerId: string;
     mechanicId: string;
     mechanicName: string;
     mechanicPhoto?: string;
     mechanicRating: number;
     mechanicTotalRatings: number;
     price: number;
-    arrivalTime: number; // in minutes
+    estimatedTime: string;
     message: string;
     distance: number; // in km
     status: 'pending' | 'accepted' | 'rejected';
@@ -97,6 +98,7 @@ export interface Booking {
         longitude: number;
     };
     price: number;
+    estimatedTime: string;
     status: 'ongoing' | 'completed' | 'cancelled';
     startedAt: Date;
     completedAt?: Date;

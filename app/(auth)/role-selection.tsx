@@ -1,18 +1,3 @@
-import React from 'react';
-import {
-    View,
-    Text,
-    StyleSheet,
-    TouchableOpacity,
-    SafeAreaView,
-    Dimensions,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { COLORS, SIZES } from '@/constants/theme';
-import Animated, { FadeInDown } from 'react-native-reanimated';
-
-const { width } = Dimensions.get('window');
 
 export default function RoleSelection() {
     const router = useRouter();

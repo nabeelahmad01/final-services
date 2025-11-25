@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/shared/Avatar';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { useAuthStore } from '@/stores/authStore';
 import { getMechanic } from '@/services/firebase/firestore';
 import { subscribeToActiveBooking } from '@/services/firebase/firestore';
@@ -51,7 +52,14 @@ export default function MechanicDashboard() {
         setRefreshing(false);
     };
 
-    if (!mechanic) return null;
+    // Show loading spinner while fetching mechanic data
+    if (!mechanic) {
+        return (
+            <View style={styles.container}>
+                <LoadingSpinner fullScreen />
+            </View>
+        );
+    }
 
     return (
         <SafeAreaView style={styles.container}>

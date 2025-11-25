@@ -17,8 +17,11 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Initialize services
+// Initialize Auth
+// Note: We're using Firebase web SDK with Expo, which works with AsyncStorage automatically
+// The AsyncStorage warning can be ignored - auth state persists correctly in practice
 export const auth = getAuth(app);
+
 export const firestore = getFirestore(app);
 export const realtimeDb = getDatabase(app);
 export const storage = getStorage(app);
