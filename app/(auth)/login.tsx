@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Button, Input } from '@/components';
-import { signIn } from '@/services/firebase/auth';
+import { signIn } from '@/services/firebase/authService';
 import { useAuthStore } from '@/stores/authStore';
 import { COLORS, SIZES } from '@/constants/theme';
 

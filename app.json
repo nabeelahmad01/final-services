@@ -13,58 +13,52 @@
       "resizeMode": "contain",
       "backgroundColor": "#00ACC1"
     },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.servicemarketplace.app",
-      "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "We need your location to connect you with nearby mechanics",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "We need your location for live tracking during active services",
-        "NSCameraUsageDescription": "We need camera access to upload service photos",
-        "NSMicrophoneUsageDescription": "We need microphone access for voice calls",
-        "NSPhotoLibraryUsageDescription": "We need photo library access to upload images"
-      },
+      "bundleIdentifier": "com.fixkar.app",
       "config": {
-        "googleMapsApiKey": "YOUR_GOOGLE_MAPS_API_KEY_HERE"
+        "googleMapsApiKey": "YOUR_GOOGLE_MAPS_API_KEY"
       }
     },
     "android": {
-      "package": "com.servicemarketplace.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#00ACC1"
       },
-      "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false,
+      "package": "com.fixkar.app",
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
-        "ACCESS_BACKGROUND_LOCATION",
         "CAMERA",
-        "RECORD_AUDIO",
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE"
       ],
       "config": {
         "googleMaps": {
-          "apiKey": "YOUR_GOOGLE_MAPS_API_KEY_HERE"
+          "apiKey": "YOUR_GOOGLE_MAPS_API_KEY"
         }
       }
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
     },
     "plugins": [
       "expo-router",
-      [
-        "expo-location",
-        {
-          "locationAlwaysAndWhenInUsePermission": "Allow Service Marketplace to use your location for live tracking."
-        }
-      ],
+      "expo-font",
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow Service Marketplace to access your camera."
+          "cameraPermission": "Allow FixKar to access your camera to upload photos"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow FixKar to use your location to find nearby mechanics"
         }
       ],
       [
@@ -76,8 +70,11 @@
       ]
     ],
     "extra": {
+      "router": {
+        "origin": false
+      },
       "eas": {
-        "projectId": "your-eas-project-id-here"
+        "projectId": "your-project-id"
       }
     }
   }

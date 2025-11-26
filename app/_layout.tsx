@@ -1,7 +1,7 @@
 import { Stack } from 'expo-router';
 import { useEffect } from 'react';
 import { useAuthStore } from '@/stores/authStore';
-import { subscribeToAuthChanges, getCurrentUser } from '@/services/firebase/auth';
+import { subscribeToAuthChanges, getCurrentUser } from '@/services/firebase/authService';
 import { StatusBar } from 'expo-status-bar';
 
 export default function RootLayout() {

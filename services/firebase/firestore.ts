@@ -24,7 +24,8 @@ import {
     Chat,
     ChatMessage,
     Mechanic,
-    ServiceCategory
+    ServiceCategory,
+    Notification,
 } from '@/types';
 
 // Service Requests
@@ -319,3 +320,56 @@ export const markMessagesAsRead = async (chatId: string, userId: string) => {
 
     await Promise.all(batch);
 };
+
+// Notifications
+export const createNotification = async (notification: Omit<Notification, 'id' | 'createdAt'>) => {
+    const docRef = await addDoc(collection(firestore, 'notifications'), {
+        ...notification,
+        read: false,
+        createdAt: Timestamp.now(),
+    });
+    return docRef.id;
+};
+
+export const subscribeToNotifications = (
+    userId: string,
+    callback: (notifications: Notification[]) => void
+) => {
+    const q = query(
+        collection(firestore, 'notifications'),
+        where('userId', '==', userId),
+        orderBy('createdAt', 'desc'),
+        limit(50)
+    );
+
+    return onSnapshot(q, (snapshot) => {
+        const notifications = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            createdAt: doc.data().createdAt.toDate(),
+        })) as Notification[];
+        callback(notifications);
+    });
+};
+
+export const markNotificationAsRead = async (notificationId: string) => {
+    await updateDoc(doc(firestore, 'notifications', notificationId), {
+        read: true,
+    });
+};
+
+export const markAllNotificationsAsRead = async (userId: string) => {
+    const q = query(
+        collection(firestore, 'notifications'),
+        where('userId', '==', userId),
+        where('read', '==', false)
+    );
+
+    const snapshot = await getDocs(q);
+    const batch = snapshot.docs.map(doc =>
+        updateDoc(doc.ref, { read: true })
+    );
+
+    await Promise.all(batch);
+};
+

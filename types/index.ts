@@ -7,12 +7,14 @@ export type ServiceCategory =
     | 'electrician'
     | 'ac_fridge'
     | 'mobile_repair'
-    | 'carpenter';
+    | 'carpenter'
+    | 'general_mart';
 
 export interface User {
     id: string;
     role: UserRole;
     name: string;
+    email: string;
     phone: string;
     profilePic?: string;
     createdAt: Date;

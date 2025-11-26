@@ -112,6 +112,12 @@ export const CATEGORIES = [
         icon: 'hammer',
         color: '#6D4C41'
     },
+    {
+        id: 'general_mart',
+        name: 'General Mart',
+        icon: 'storefront',
+        color: '#8E24AA'
+    },
 ];
 
 export const DIAMOND_PACKAGES = [

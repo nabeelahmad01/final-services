@@ -1,29 +1,12 @@
-import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getDatabase } from 'firebase/database';
 import { getStorage } from 'firebase/storage';
-
-const firebaseConfig = {
-    apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
-    authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
-    projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
-    storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-    appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
-    databaseURL: process.env.EXPO_PUBLIC_FIREBASE_DATABASE_URL,
-};
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-
-// Initialize Auth
-// Note: We're using Firebase web SDK with Expo, which works with AsyncStorage automatically
-// The AsyncStorage warning can be ignored - auth state persists correctly in practice
-export const auth = getAuth(app);
+import { app } from './app';
+import { auth } from './auth';
 
 export const firestore = getFirestore(app);
 export const realtimeDb = getDatabase(app);
 export const storage = getStorage(app);
 
+export { app, auth };
 export default app;

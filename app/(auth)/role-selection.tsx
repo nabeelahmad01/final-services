@@ -1,3 +1,8 @@
+import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import { COLORS, SIZES } from '@/constants/theme';
 
 export default function RoleSelection() {
     const router = useRouter();

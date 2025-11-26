@@ -1,36 +1,32 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
     StyleSheet,
     SafeAreaView,
     ScrollView,
+    TouchableOpacity,
     Alert,
     KeyboardAvoidingView,
     Platform,
-    TouchableOpacity,
-    Dimensions,
     ActivityIndicator,
 } from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
-import * as Location from 'expo-location';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useAuthStore } from '@/stores/authStore';
 import { createServiceRequest } from '@/services/firebase/firestore';
 import { COLORS, SIZES, CATEGORIES } from '@/constants/theme';
 import { ServiceCategory } from '@/types';
-
-const { width, height } = Dimensions.get('window');
+import { MapView, Marker, PROVIDER_GOOGLE } from '@/utils/mapHelpers';
 
 export default function ServiceRequest() {
     const router = useRouter();
     const params = useLocalSearchParams();
     const category = (params.category as ServiceCategory) || 'car_mechanic';
     const { user } = useAuthStore();
-    const mapRef = useRef<MapView>(null);
 
     const [description, setDescription] = useState('');
     const [location, setLocation] = useState({
@@ -82,7 +78,6 @@ export default function ServiceRequest() {
         const { latitude, longitude } = event.nativeEvent.coordinate;
         setLocation({ latitude, longitude });
 
-        // Get address from coordinates
         try {
             const addressData = await Location.reverseGeocodeAsync({ latitude, longitude });
             if (addressData[0]) {
@@ -182,17 +177,31 @@ export default function ServiceRequest() {
                         </View>
                     </View>
 
-                    {/* Map */}
+                    {/* Map or Location Input */}
                     <View style={styles.mapContainer}>
-                        <Text style={styles.mapLabel}>Select Location on Map</Text>
-                        {loadingLocation ? (
+                        <Text style={styles.mapLabel}>Service Location</Text>
+                        {Platform.OS === 'web' ? (
+                            <View style={styles.webLocationContainer}>
+                                <Input
+                                    value={address}
+                                    onChangeText={setAddress}
+                                    placeholder="Enter your address"
+                                />
+                                <TouchableOpacity
+                                    style={styles.getCurrentLocationBtn}
+                                    onPress={getCurrentLocation}
+                                >
+                                    <Ionicons name="locate" size={20} color={COLORS.white} />
+                                    <Text style={styles.getCurrentLocationText}>Use Current Location</Text>
+                                </TouchableOpacity>
+                            </View>
+                        ) : loadingLocation ? (
                             <View style={styles.mapPlaceholder}>
                                 <ActivityIndicator size="large" color={COLORS.primary} />
                                 <Text style={styles.loadingText}>Getting your location...</Text>
                             </View>
-                        ) : (
+                        ) : MapView ? (
                             <MapView
-                                ref={mapRef}
                                 provider={PROVIDER_GOOGLE}
                                 style={styles.map}
                                 initialRegion={{
@@ -202,20 +211,24 @@ export default function ServiceRequest() {
                                 }}
                                 onPress={handleMapPress}
                             >
-                                <Marker
-                                    coordinate={location}
-                                    title="Service Location"
-                                    pinColor={COLORS.primary}
-                                />
+                                {Marker && (
+                                    <Marker
+                                        coordinate={location}
+                                        title="Service Location"
+                                        pinColor={COLORS.primary}
+                                    />
+                                )}
                             </MapView>
-                        )}
+                        ) : null}
 
-                        <TouchableOpacity
-                            style={styles.currentLocationButton}
-                            onPress={getCurrentLocation}
-                        >
-                            <Ionicons name="locate" size={24} color={COLORS.white} />
-                        </TouchableOpacity>
+                        {Platform.OS !== 'web' && !loadingLocation && (
+                            <TouchableOpacity
+                                style={styles.currentLocationButton}
+                                onPress={getCurrentLocation}
+                            >
+                                <Ionicons name="locate" size={24} color={COLORS.white} />
+                            </TouchableOpacity>
+                        )}
                     </View>
 
                     {/* Address Display */}
@@ -234,8 +247,6 @@ export default function ServiceRequest() {
                                 placeholder="Describe the issue or service needed..."
                                 value={description}
                                 onChangeText={setDescription}
-                                multiline
-                                numberOfLines={4}
                                 style={styles.textArea}
                             />
                         </View>
@@ -339,6 +350,24 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         gap: 12,
+    },
+    webLocationContainer: {
+        gap: 12,
+    },
+    getCurrentLocationBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        backgroundColor: COLORS.primary,
+        paddingVertical: 12,
+        paddingHorizontal: 20,
+        borderRadius: 8,
+    },
+    getCurrentLocationText: {
+        color: COLORS.white,
+        fontSize: SIZES.base,
+        fontWeight: '600',
     },
     loadingText: {
         fontSize: SIZES.sm,

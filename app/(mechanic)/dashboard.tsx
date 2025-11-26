@@ -82,23 +82,40 @@ export default function MechanicDashboard() {
 
                 {/* Verification Status */}
                 {!mechanic.isVerified && (
-                    <Card style={[styles.statusCard, { backgroundColor: COLORS.warning + '20' }]}>
-                        <Ionicons name="time-outline" size={24} color={COLORS.warning} />
+                    <Card style={[styles.statusCard, { backgroundColor: COLORS.warning + '20', borderLeftWidth: 4, borderLeftColor: COLORS.warning }]}>
                         <View style={styles.statusContent}>
-                            <Text style={styles.statusTitle}>Verification Pending</Text>
-                            <Text style={styles.statusText}>
-                                Your KYC documents are under review
-                            </Text>
+                            <View style={styles.statusIconContainer}>
+                                <Ionicons name="time-outline" size={32} color={COLORS.warning} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.statusTitle}>KYC Verification Pending</Text>
+                                <Text style={styles.statusText}>
+                                    Complete your KYC to start receiving service requests
+                                </Text>
+                                <TouchableOpacity
+                                    style={styles.kycButton}
+                                    onPress={() => router.push('/(mechanic)/kyc-upload')}
+                                    activeOpacity={0.8}
+                                >
+                                    <Ionicons name="cloud-upload-outline" size={20} color={COLORS.white} />
+                                    <Text style={styles.kycButtonText}>Upload Documents</Text>
+                                    <Ionicons name="arrow-forward" size={20} color={COLORS.white} />
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     </Card>
                 )}
 
                 {mechanic.isVerified && (
-                    <Card style={[styles.statusCard, { backgroundColor: COLORS.success + '20' }]}>
-                        <Ionicons name="checkmark-circle" size={24} color={COLORS.success} />
+                    <Card style={[styles.statusCard, { backgroundColor: COLORS.success + '20', borderLeftWidth: 4, borderLeftColor: COLORS.success }]}>
                         <View style={styles.statusContent}>
-                            <Text style={styles.statusTitle}>Verified</Text>
-                            <Text style={styles.statusText}>You can accept service requests</Text>
+                            <View style={[styles.statusIconContainer, { backgroundColor: COLORS.success + '20' }]}>
+                                <Ionicons name="checkmark-circle" size={32} color={COLORS.success} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={[styles.statusTitle, { color: COLORS.success }]}>✓ Verified Account</Text>
+                                <Text style={styles.statusText}>You can now accept service requests</Text>
+                            </View>
                         </View>
                     </Card>
                 )}
@@ -210,19 +227,53 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         gap: 12,
         marginBottom: 24,
+        padding: 20,
+    },
+    statusIconContainer: {
+        width: 56,
+        height: 56,
+        borderRadius: 28,
+        backgroundColor: COLORS.warning + '20',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     statusContent: {
         flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 16,
     },
     statusTitle: {
-        fontSize: SIZES.base,
-        fontWeight: '600',
+        fontSize: SIZES.lg,
+        fontWeight: 'bold',
         color: COLORS.text,
+        marginBottom: 4,
     },
     statusText: {
         fontSize: SIZES.sm,
         color: COLORS.textSecondary,
-        marginTop: 2,
+        marginBottom: 12,
+    },
+    kycButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        backgroundColor: COLORS.warning,
+        paddingVertical: 12,
+        paddingHorizontal: 20,
+        borderRadius: 25,
+        marginTop: 8,
+        shadowColor: COLORS.warning,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 4,
+    },
+    kycButtonText: {
+        color: COLORS.white,
+        fontSize: SIZES.base,
+        fontWeight: 'bold',
     },
     statsGrid: {
         flexDirection: 'row',

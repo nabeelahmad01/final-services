@@ -14,7 +14,7 @@ import { Avatar } from '@/components/shared/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { useAuthStore } from '@/stores/authStore';
-import { signOut } from '@/services/firebase/auth';
+import { signOut } from '@/services/firebase/authService';
 import { COLORS, SIZES } from '@/constants/theme';
 
 export default function ProfileScreen() {

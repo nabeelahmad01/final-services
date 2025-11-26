@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useAuthStore } from '@/stores/authStore';
-import { subscribeToServiceRequests, createProposal, updateMechanicDiamonds } from '@/services/firebase/firestore';
+import { subscribeToServiceRequests, createProposal, updateMechanicDiamonds, getMechanic } from '@/services/firebase/firestore';
 import { COLORS, SIZES, CATEGORIES } from '@/constants/theme';
 import { ServiceRequest } from '@/types';
 
@@ -50,14 +50,23 @@ export default function MechanicRequests() {
                             // Deduct diamond
                             await updateMechanicDiamonds(user.id, 1, 'subtract');
 
+                            // Get mechanic details
+                            const mechanicData = await getMechanic(user.id);
+                            if (!mechanicData) throw new Error('Mechanic data not found');
+
                             // Create proposal
                             await createProposal({
                                 requestId: request.id,
+                                customerId: request.customerId,
                                 mechanicId: user.id,
                                 mechanicName: user.name,
+                                mechanicPhoto: user.profilePic,
+                                mechanicRating: mechanicData.rating,
+                                mechanicTotalRatings: mechanicData.totalRatings,
                                 price: 2000, // TODO: Let mechanic input
                                 estimatedTime: '1-2 hours', // TODO: Let mechanic input
                                 message: 'I can help you with this!',
+                                distance: 2.5, // TODO: Calculate actual distance
                                 status: 'pending',
                             });
 

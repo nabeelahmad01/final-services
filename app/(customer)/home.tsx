@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '@/stores/authStore';
 import { useBookingStore } from '@/stores/bookingStore';
+import { useNotifications } from '@/stores/useNotifications';
 import { subscribeToActiveBooking } from '@/services/firebase/firestore';
 import { COLORS, SIZES, CATEGORIES } from '@/constants/theme';
 import { ServiceCategory } from '@/types';
@@ -70,9 +71,24 @@ export default function CustomerHome() {
                         <Text style={styles.greeting}>Hello,</Text>
                         <Text style={styles.userName}>{user?.name}</Text>
                     </View>
-                    <TouchableOpacity onPress={() => router.push('/(shared)/profile')}>
-                        <Avatar name={user?.name || ''} uri={user?.profilePic} size={48} />
-                    </TouchableOpacity>
+                    <View style={styles.headerIcons}>
+                        <TouchableOpacity
+                            onPress={() => router.push('/(shared)/notifications')}
+                            style={styles.iconButton}
+                        >
+                            {useNotifications.getState().unreadCount > 0 && (
+                                <View style={styles.badge}>
+                                    <Text style={styles.badgeText}>
+                                        {useNotifications.getState().unreadCount}
+                                    </Text>
+                                </View>
+                            )}
+                            <Ionicons name="notifications-outline" size={26} color={COLORS.text} />
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => router.push('/(shared)/profile')}>
+                            <Avatar name={user?.name || ''} uri={user?.profilePic} size={48} />
+                        </TouchableOpacity>
+                    </View>
                 </View>
 
                 {/* Active Booking Banner */}
@@ -176,6 +192,32 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: COLORS.text,
         marginTop: 4,
+    },
+    headerIcons: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 16,
+    },
+    iconButton: {
+        position: 'relative',
+        padding: 4,
+    },
+    badge: {
+        position: 'absolute',
+        top: 0,
+        right: 0,
+        backgroundColor: COLORS.danger,
+        borderRadius: 10,
+        minWidth: 20,
+        height: 20,
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 1,
+    },
+    badgeText: {
+        color: COLORS.white,
+        fontSize: 10,
+        fontWeight: 'bold',
     },
     activeBookingCard: {
         backgroundColor: COLORS.primary + '10',
