@@ -1,4 +1,5 @@
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, Input } from '@/components';
 import { useAuthStore } from '@/stores/authStore';

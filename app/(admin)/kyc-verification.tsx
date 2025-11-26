@@ -178,35 +178,31 @@ export default function AdminKYCVerification() {
             <View style={styles.documents}>
                 <View style={styles.docItem}>
                     <Text style={styles.docLabel}>CNIC Front</Text>
-                    <View style={styles.docPlaceholder}>
-                        <Ionicons name="document-text" size={24} color={COLORS.primary} />
-                        <Text style={styles.docText}>Image</Text>
-                    </View>
+                    <TouchableOpacity style={styles.docImageContainer}>
+                        <Image source={{ uri: item.cnicFront }} style={styles.docImage} />
+                    </TouchableOpacity>
                 </View>
 
                 <View style={styles.docItem}>
                     <Text style={styles.docLabel}>CNIC Back</Text>
-                    <View style={styles.docPlaceholder}>
-                        <Ionicons name="document-text" size={24} color={COLORS.primary} />
-                        <Text style={styles.docText}>Image</Text>
-                    </View>
+                    <TouchableOpacity style={styles.docImageContainer}>
+                        <Image source={{ uri: item.cnicBack }} style={styles.docImage} />
+                    </TouchableOpacity>
                 </View>
 
                 <View style={styles.docItem}>
                     <Text style={styles.docLabel}>Selfie</Text>
-                    <View style={styles.docPlaceholder}>
-                        <Ionicons name="person" size={24} color={COLORS.primary} />
-                        <Text style={styles.docText}>Photo</Text>
-                    </View>
+                    <TouchableOpacity style={styles.docImageContainer}>
+                        <Image source={{ uri: item.selfie }} style={styles.docImage} />
+                    </TouchableOpacity>
                 </View>
 
                 {item.certificate && (
                     <View style={styles.docItem}>
                         <Text style={styles.docLabel}>Certificate</Text>
-                        <View style={styles.docPlaceholder}>
-                            <Ionicons name="ribbon" size={24} color={COLORS.primary} />
-                            <Text style={styles.docText}>Cert</Text>
-                        </View>
+                        <TouchableOpacity style={styles.docImageContainer}>
+                            <Image source={{ uri: item.certificate }} style={styles.docImage} />
+                        </TouchableOpacity>
                     </View>
                 )}
             </View>
@@ -383,19 +379,18 @@ const styles = StyleSheet.create({
         color: COLORS.textSecondary,
         marginBottom: 6,
     },
-    docPlaceholder: {
+    docImageContainer: {
         height: 100,
         borderRadius: 8,
+        overflow: 'hidden',
         backgroundColor: COLORS.background,
         borderWidth: 1,
         borderColor: COLORS.border,
-        justifyContent: 'center',
-        alignItems: 'center',
-        gap: 4,
     },
-    docText: {
-        fontSize: SIZES.xs,
-        color: COLORS.textSecondary,
+    docImage: {
+        width: '100%',
+        height: '100%',
+        resizeMode: 'cover',
     },
     actions: {
         flexDirection: 'row',

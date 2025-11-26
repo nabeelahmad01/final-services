@@ -12,11 +12,14 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { collection, addDoc, updateDoc, doc, Timestamp } from 'firebase/firestore';
 import { COLORS, SIZES } from '@/constants/theme';
 import { useAuthStore } from '@/stores/authStore';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { uploadImage } from '@/services/firebase/storage';
+import { firestore } from '@/services/firebase/config';
 
 export default function KYCUpload() {
     const router = useRouter();
@@ -83,6 +86,58 @@ export default function KYCUpload() {
 
         if (!termsAccepted) {
             Alert.alert('Error', 'Please accept terms and conditions');
+            return;
+        }
+
+        if (!user?.id) {
+            Alert.alert('Error', 'User not authenticated');
+            return;
+        }
+
+        setLoading(true);
+
+        try {
+            // Upload images to Firebase Storage
+            const cnicFrontUrl = await uploadImage(cnicFront, `kyc/${user.id}/cnic_front_${Date.now()}.jpg`);
+            const cnicBackUrl = await uploadImage(cnicBack, `kyc/${user.id}/cnic_back_${Date.now()}.jpg`);
+            const selfieUrl = await uploadImage(selfie, `kyc/${user.id}/selfie_${Date.now()}.jpg`);
+
+            let certificateUrl: string | undefined;
+            if (certificate) {
+                certificateUrl = await uploadImage(certificate, `kyc/${user.id}/certificate_${Date.now()}.jpg`);
+            }
+
+            // Create KYC request in Firestore
+            await addDoc(collection(firestore, 'kycRequests'), {
+                mechanicId: user.id,
+                mechanicName: user.name,
+                fullName,
+                cnicNumber,
+                address,
+                cnicFront: cnicFrontUrl,
+                cnicBack: cnicBackUrl,
+                selfie: selfieUrl,
+                certificate: certificateUrl,
+                vehicleType: vehicleType || null,
+                vehicleNumber: vehicleNumber || null,
+                vehicleColor: vehicleColor || null,
+                status: 'pending',
+                submittedAt: Timestamp.now(),
+            });
+
+            // Update mechanic's KYC status
+            await updateDoc(doc(firestore, 'mechanics', user.id), {
+                kycStatus: 'pending',
+            });
+
+            Alert.alert(
+                'Success',
+                'Your KYC documents have been submitted for verification. You will be notified once reviewed.',
+                [{ text: 'OK', onPress: () => router.back() }]
+            );
+        } catch (error: any) {
+            Alert.alert('Error', error.message || 'Failed to submit KYC documents');
+        } finally {
             setLoading(false);
         }
     };

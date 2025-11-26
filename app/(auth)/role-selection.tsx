@@ -1,4 +1,5 @@
-import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -82,6 +83,15 @@ export default function RoleSelection() {
                         <Text style={styles.loginText}>
                             Already have an account? <Text style={styles.loginTextBold}>Login</Text>
                         </Text>
+                    </TouchableOpacity>
+
+                    {/* Admin Access Button */}
+                    <TouchableOpacity
+                        onPress={() => router.push('/(admin)')}
+                        style={styles.adminLink}
+                    >
+                        <Ionicons name="shield-checkmark-outline" size={16} color={COLORS.textSecondary} />
+                        <Text style={styles.adminText}>Admin Access</Text>
                     </TouchableOpacity>
                 </Animated.View>
             </View>
@@ -181,5 +191,17 @@ const styles = StyleSheet.create({
     loginTextBold: {
         fontWeight: 'bold',
         color: COLORS.primary,
+    },
+    adminLink: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        padding: 12,
+        marginTop: 8,
+    },
+    adminText: {
+        fontSize: SIZES.sm,
+        color: COLORS.textSecondary,
     },
 });

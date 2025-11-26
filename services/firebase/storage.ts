@@ -1,4 +1,4 @@
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { storage } from './config';
 
 /**
@@ -9,15 +9,62 @@ import { storage } from './config';
  */
 export const uploadImage = async (uri: string, path: string): Promise<string> => {
     try {
-        const response = await fetch(uri);
-        const blob = await response.blob();
-        const storageRef = ref(storage, path);
+        console.log('Starting upload for:', path);
+        console.log('URI:', uri);
 
-        await uploadBytes(storageRef, blob);
+        // Fetch the image as a blob
+        const response = await fetch(uri);
+
+        if (!response.ok) {
+            throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+        }
+
+        const blob = await response.blob();
+        console.log('Blob created, size:', blob.size, 'type:', blob.type);
+
+        if (blob.size === 0) {
+            throw new Error('Image file is empty');
+        }
+
+        // Create storage reference
+        const storageRef = ref(storage, path);
+        console.log('Storage ref created');
+
+        // Upload the blob
+        const uploadTask = uploadBytesResumable(storageRef, blob);
+
+        // Wait for upload to complete with progress tracking
+        await new Promise<void>((resolve, reject) => {
+            uploadTask.on(
+                'state_changed',
+                (snapshot) => {
+                    const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                    console.log('Upload progress:', progress.toFixed(2) + '%');
+                },
+                (error) => {
+                    console.error('Upload error:', error);
+                    reject(error);
+                },
+                () => {
+                    console.log('Upload complete');
+                    resolve();
+                }
+            );
+        });
+
+        // Get download URL
         const downloadURL = await getDownloadURL(storageRef);
+        console.log('Download URL obtained:', downloadURL);
 
         return downloadURL;
     } catch (error: any) {
-        throw new Error(`Failed to upload image: ${error.message}`);
+        console.error('Upload error details:', {
+            message: error.message,
+            code: error.code,
+            serverResponse: error.serverResponse,
+            customData: error.customData
+        });
+
+        throw new Error(`Failed to upload image: ${error.code || error.message}`);
     }
 };
