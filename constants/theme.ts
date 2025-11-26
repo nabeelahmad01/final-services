@@ -18,10 +18,11 @@ export const COLORS = {
 };
 
 export const FONTS = {
-    regular: 'System',
-    medium: 'System',
-    bold: 'System',
-    light: 'System',
+    light: 'PlusJakartaSans_300Light',
+    regular: 'PlusJakartaSans_400Regular',
+    medium: 'PlusJakartaSans_500Medium',
+    semiBold: 'PlusJakartaSans_600SemiBold',
+    bold: 'PlusJakartaSans_700Bold',
 };
 
 export const SIZES = {
@@ -67,6 +68,12 @@ export const SHADOWS = {
         shadowRadius: 12,
         elevation: 8,
     },
+};
+
+export const ANIMATION = {
+    fast: 150,
+    normal: 250,
+    slow: 350,
 };
 
 export const CATEGORIES = [
@@ -156,6 +163,7 @@ export default {
     FONTS,
     SIZES,
     SHADOWS,
+    ANIMATION,
     CATEGORIES,
     DIAMOND_PACKAGES,
     DIAMOND_COST_PER_PROPOSAL,

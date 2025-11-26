@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { useAuthStore } from '@/stores/authStore';
 import { signOut } from '@/services/firebase/authService';
-import { COLORS, SIZES } from '@/constants/theme';
+import { COLORS, SIZES, FONTS } from '@/constants/theme';
 
 export default function ProfileScreen() {
     const router = useRouter();
@@ -61,29 +61,49 @@ export default function ProfileScreen() {
                 </View>
 
                 <View style={styles.section}>
-                    <Card style={styles.menuItem}>
-                        <Ionicons name="person-outline" size={24} color={COLORS.text} />
-                        <Text style={styles.menuText}>Edit Profile</Text>
-                        <Ionicons name="chevron-forward" size={24} color={COLORS.textSecondary} />
-                    </Card>
+                    <TouchableOpacity
+                        style={styles.menuItem}
+                        onPress={() => router.push('/(shared)/edit-profile' as any)}
+                    >
+                        <Card style={styles.menuItemCard}>
+                            <Ionicons name="person-outline" size={24} color={COLORS.text} />
+                            <Text style={styles.menuText}>Edit Profile</Text>
+                            <Ionicons name="chevron-forward" size={24} color={COLORS.textSecondary} />
+                        </Card>
+                    </TouchableOpacity>
 
-                    <Card style={styles.menuItem}>
-                        <Ionicons name="settings-outline" size={24} color={COLORS.text} />
-                        <Text style={styles.menuText}>Settings</Text>
-                        <Ionicons name="chevron-forward" size={24} color={COLORS.textSecondary} />
-                    </Card>
+                    <TouchableOpacity
+                        style={styles.menuItem}
+                        onPress={() => router.push('/(shared)/settings' as any)}
+                    >
+                        <Card style={styles.menuItemCard}>
+                            <Ionicons name="settings-outline" size={24} color={COLORS.text} />
+                            <Text style={styles.menuText}>Settings</Text>
+                            <Ionicons name="chevron-forward" size={24} color={COLORS.textSecondary} />
+                        </Card>
+                    </TouchableOpacity>
 
-                    <Card style={styles.menuItem}>
-                        <Ionicons name="help-circle-outline" size={24} color={COLORS.text} />
-                        <Text style={styles.menuText}>Help & Support</Text>
-                        <Ionicons name="chevron-forward" size={24} color={COLORS.textSecondary} />
-                    </Card>
+                    <TouchableOpacity
+                        style={styles.menuItem}
+                        onPress={() => router.push('/(shared)/help-support')}
+                    >
+                        <Card style={styles.menuItemCard}>
+                            <Ionicons name="help-circle-outline" size={24} color={COLORS.text} />
+                            <Text style={styles.menuText}>Help & Support</Text>
+                            <Ionicons name="chevron-forward" size={24} color={COLORS.textSecondary} />
+                        </Card>
+                    </TouchableOpacity>
 
-                    <Card style={styles.menuItem}>
-                        <Ionicons name="document-text-outline" size={24} color={COLORS.text} />
-                        <Text style={styles.menuText}>Terms & Conditions</Text>
-                        <Ionicons name="chevron-forward" size={24} color={COLORS.textSecondary} />
-                    </Card>
+                    <TouchableOpacity
+                        style={styles.menuItem}
+                        onPress={() => router.push('/(shared)/about')}
+                    >
+                        <Card style={styles.menuItemCard}>
+                            <Ionicons name="information-circle-outline" size={24} color={COLORS.text} />
+                            <Text style={styles.menuText}>About F ixKar</Text>
+                            <Ionicons name="chevron-forward" size={24} color={COLORS.textSecondary} />
+                        </Card>
+                    </TouchableOpacity>
                 </View>
 
                 <Button
@@ -112,6 +132,7 @@ const styles = StyleSheet.create({
     headerTitle: {
         fontSize: 20,
         fontWeight: 'bold',
+        fontFamily: FONTS.bold,
         color: COLORS.text,
     },
     scrollContent: {
@@ -124,11 +145,13 @@ const styles = StyleSheet.create({
     userName: {
         fontSize: 24,
         fontWeight: 'bold',
+        fontFamily: FONTS.bold,
         color: COLORS.text,
         marginTop: 16,
     },
     userPhone: {
         fontSize: SIZES.base,
+        fontFamily: FONTS.regular,
         color: COLORS.textSecondary,
         marginTop: 4,
     },
@@ -142,22 +165,26 @@ const styles = StyleSheet.create({
     roleText: {
         color: COLORS.white,
         fontWeight: '600',
+        fontFamily: FONTS.semiBold,
         fontSize: SIZES.sm,
     },
     section: {
         marginBottom: 24,
     },
     menuItem: {
+        marginBottom: 12,
+    },
+    menuItemCard: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
         padding: 16,
-        marginBottom: 12,
     },
     menuText: {
         flex: 1,
         fontSize: SIZES.base,
         color: COLORS.text,
         fontWeight: '500',
+        fontFamily: FONTS.medium,
     },
 });

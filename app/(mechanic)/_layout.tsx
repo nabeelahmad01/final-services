@@ -1,13 +1,103 @@
-import { Stack } from 'expo-router';
+import { Tabs } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { COLORS, FONTS } from '@/constants/theme';
 
 export default function MechanicLayout() {
     return (
-        <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="dashboard" />
-            <Stack.Screen name="requests" />
-            <Stack.Screen name="active-job" />
-            <Stack.Screen name="wallet" />
-            <Stack.Screen name="history" />
-        </Stack>
+        <Tabs
+            screenOptions={{
+                headerShown: false,
+                tabBarActiveTintColor: COLORS.primary,
+                tabBarInactiveTintColor: COLORS.textSecondary,
+                tabBarStyle: {
+                    backgroundColor: COLORS.surface,
+                    borderTopWidth: 1,
+                    borderTopColor: COLORS.border,
+                    height: 60,
+                    paddingBottom: 8,
+                    paddingTop: 8,
+                },
+                tabBarLabelStyle: {
+                    fontSize: 12,
+                    fontFamily: FONTS.medium,
+                    fontWeight: '500',
+                },
+            }}
+        >
+            <Tabs.Screen
+                name="dashboard"
+                options={{
+                    title: 'Dashboard',
+                    tabBarIcon: ({ color, size }) => (
+                        <Ionicons name="grid" size={size} color={color} />
+                    ),
+                }}
+            />
+            <Tabs.Screen
+                name="requests"
+                options={{
+                    title: 'Requests',
+                    tabBarIcon: ({ color, size }) => (
+                        <Ionicons name="list" size={size} color={color} />
+                    ),
+                }}
+            />
+            <Tabs.Screen
+                name="earnings"
+                options={{
+                    title: 'Earnings',
+                    tabBarIcon: ({ color, size }) => (
+                        <Ionicons name="cash" size={size} color={color} />
+                    ),
+                }}
+            />
+            <Tabs.Screen
+                name="profile-tab"
+                options={{
+                    title: 'Profile',
+                    tabBarIcon: ({ color, size }) => (
+                        <Ionicons name="person" size={size} color={color} />
+                    ),
+                }}
+            />
+
+            {/* Hidden screens */}
+            <Tabs.Screen
+                name="active-job"
+                options={{
+                    href: null,
+                }}
+            />
+            <Tabs.Screen
+                name="history"
+                options={{
+                    href: null,
+                }}
+            />
+            <Tabs.Screen
+                name="wallet"
+                options={{
+                    href: null,
+                }}
+            />
+            <Tabs.Screen
+                name="kyc-upload"
+                options={{
+                    href: null,
+                }}
+            />
+            <Tabs.Screen
+                name="reviews"
+                options={{
+                    href: null,
+                }}
+            />
+            <Tabs.Screen
+                name="job-details"
+                options={{
+                    href: null,
+                }}
+            />
+        </Tabs>
     );
 }

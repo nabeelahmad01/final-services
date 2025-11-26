@@ -1,20 +1,33 @@
 import React from 'react';
-import { View, StyleSheet, ViewStyle, StyleProp } from 'react-native';
+import { View, StyleSheet, ViewStyle, StyleProp, TouchableOpacity, ViewProps } from 'react-native';
 import { COLORS, SIZES, SHADOWS } from '@/constants/theme';
 
-interface CardProps {
+interface CardProps extends ViewProps {
     children: React.ReactNode;
     style?: StyleProp<ViewStyle>;
     elevated?: boolean;
+    onPress?: () => void;
 }
 
-export const Card: React.FC<CardProps> = ({
+export const Card = ({
     children,
     style,
-    elevated = true
-}) => {
+    elevated = true,
+    onPress,
+    ...props
+}: CardProps) => {
+    const cardStyle = [styles.card, elevated && SHADOWS.medium, style];
+
+    if (onPress) {
+        return (
+            <TouchableOpacity style={cardStyle} onPress={onPress} activeOpacity={0.7} {...(props as any)}>
+                {children}
+            </TouchableOpacity>
+        );
+    }
+
     return (
-        <View style={[styles.card, elevated && SHADOWS.medium, style]}>
+        <View style={cardStyle} {...props}>
             {children}
         </View>
     );

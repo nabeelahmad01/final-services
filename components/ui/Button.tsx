@@ -7,7 +7,8 @@ import {
     ViewStyle,
     TextStyle,
 } from 'react-native';
-import { COLORS, SIZES, SHADOWS } from '@/constants/theme';
+import * as Haptics from 'expo-haptics';
+import { COLORS, SIZES, SHADOWS, FONTS } from '@/constants/theme';
 
 interface ButtonProps {
     title: string;
@@ -32,6 +33,13 @@ export const Button: React.FC<ButtonProps> = ({
     textStyle,
     icon,
 }) => {
+    const handlePress = () => {
+        if (!disabled && !loading) {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            onPress();
+        }
+    };
+
     const buttonStyles = [
         styles.button,
         styles[`button_${variant}`],
@@ -50,7 +58,7 @@ export const Button: React.FC<ButtonProps> = ({
     return (
         <TouchableOpacity
             style={buttonStyles}
-            onPress={onPress}
+            onPress={handlePress}
             disabled={disabled || loading}
             activeOpacity={0.7}
         >
@@ -110,6 +118,7 @@ const styles = StyleSheet.create({
     },
     text: {
         fontWeight: '600',
+        fontFamily: FONTS.semiBold,
     },
     text_primary: {
         color: COLORS.white,
