@@ -20,6 +20,7 @@ import { createOrGetChat } from '@/services/firebase/firestore';
 import { COLORS, SIZES } from '@/constants/theme';
 import { Mechanic } from '@/types';
 import { MapView, Marker, Polyline, PROVIDER_GOOGLE } from '@/utils/mapHelpers';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { width, height } = Dimensions.get('window');
 
@@ -105,7 +106,7 @@ export default function TrackingScreen() {
     if (!activeBooking || !mechanic) return null;
 
     return (
-        <View style={styles.container}>
+        <SafeAreaView style={styles.container}>
             {Platform.OS === 'web' ? (
                 <View style={styles.map}>
                     <View style={styles.webMapPlaceholder}>
@@ -221,7 +222,7 @@ export default function TrackingScreen() {
                     <Text style={styles.cancelButtonText}>Cancel the service</Text>
                 </TouchableOpacity>
             </View>
-        </View>
+        </SafeAreaView>
     );
 }
 
