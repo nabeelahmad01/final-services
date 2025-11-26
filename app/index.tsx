@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from '@/stores/authStore';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function Index() {
     const router = useRouter();
@@ -45,9 +46,9 @@ export default function Index() {
     }
 
     return (
-        <View style={styles.container}>
+        <SafeAreaView style={styles.container}>
             <LoadingSpinner fullScreen />
-        </View>
+        </SafeAreaView>
     );
 }
 
