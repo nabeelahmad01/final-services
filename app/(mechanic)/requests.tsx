@@ -3,7 +3,6 @@ import {
     View,
     Text,
     StyleSheet,
-    SafeAreaView,
     ScrollView,
     TouchableOpacity,
     RefreshControl,
@@ -17,6 +16,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { subscribeToServiceRequests, createProposal, updateMechanicDiamonds, getMechanic } from '@/services/firebase/firestore';
 import { COLORS, SIZES, CATEGORIES } from '@/constants/theme';
 import { ServiceRequest } from '@/types';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function MechanicRequests() {
     const router = useRouter();

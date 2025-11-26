@@ -3,7 +3,6 @@ import {
     View,
     Text,
     StyleSheet,
-    SafeAreaView,
     ScrollView,
     TouchableOpacity,
     RefreshControl,
@@ -17,6 +16,7 @@ import { Button } from '@/components/ui/Button';
 import { subscribeToProposals, updateProposalStatus, createBooking, updateServiceRequestStatus, getServiceRequest } from '@/services/firebase/firestore';
 import { COLORS, SIZES } from '@/constants/theme';
 import { Proposal } from '@/types';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function Proposals() {
     const router = useRouter();
