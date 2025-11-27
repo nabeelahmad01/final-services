@@ -73,7 +73,7 @@ export default function AdminLogin() {
                     />
 
                     <TouchableOpacity
-                        onPress={() => router.back()}
+                        onPress={() => router.push('/(admin)/index')}
                         style={styles.backButton}
                     >
                         <Text style={styles.backText}>Back to App</Text>

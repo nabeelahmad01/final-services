@@ -128,7 +128,7 @@ export default function SignUp() {
 
                         <Button
                             title="Back"
-                            onPress={() => router.back()}
+                            onPress={() => router.push('/(auth)/role-selection')}
                             variant="outline"
                         />
                     </View>

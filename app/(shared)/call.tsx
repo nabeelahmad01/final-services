@@ -37,7 +37,7 @@ export default function CallScreen() {
     };
 
     const handleEndCall = () => {
-        router.back();
+        router.push('/(shared)/profile');
     };
 
     return (

@@ -133,7 +133,7 @@ export default function KYCUpload() {
             Alert.alert(
                 'Success',
                 'Your KYC documents have been submitted for verification. You will be notified once reviewed.',
-                [{ text: 'OK', onPress: () => router.back() }]
+                [{ text: 'OK', onPress: () => router.push('/(mechanic)/dashboard') }]
             );
         } catch (error: any) {
             Alert.alert('Error', error.message || 'Failed to submit KYC documents');

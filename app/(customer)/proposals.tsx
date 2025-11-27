@@ -102,7 +102,7 @@ export default function Proposals() {
             >
                 {/* Header */}
                 <View style={styles.header}>
-                    <TouchableOpacity onPress={() => router.back()}>
+                    <TouchableOpacity onPress={() => router.push('/(customer)/home')}>
                         <Ionicons name="arrow-back" size={24} color={COLORS.text} />
                     </TouchableOpacity>
                     <Text style={styles.headerTitle}>Proposals</Text>

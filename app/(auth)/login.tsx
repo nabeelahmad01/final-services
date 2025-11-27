@@ -95,7 +95,7 @@ export default function Login() {
 
                         <Button
                             title="Back to Role Selection"
-                            onPress={() => router.back()}
+                            onPress={() => router.push('/(auth)/role-selection')}
                             variant="outline"
                         />
                     </View>

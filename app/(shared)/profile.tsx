@@ -38,10 +38,19 @@ export default function ProfileScreen() {
 
     if (!user) return null;
 
+    const getHomeRoute = () => {
+        switch (user.role) {
+            case 'customer': return '/(customer)/home';
+            case 'mechanic': return '/(mechanic)/dashboard';
+            case 'admin': return '/(admin)/index';
+            default: return '/(customer)/home';
+        }
+    };
+
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()}>
+                <TouchableOpacity onPress={() => router.push(getHomeRoute())}>
                     <Ionicons name="arrow-back" size={24} color={COLORS.text} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Profile</Text>

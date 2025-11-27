@@ -8,6 +8,7 @@ export const COLORS = {
     success: '#43A047',
     danger: '#E53935',
     warning: '#FFA726',
+    info: '#2196F3',
     background: '#F5F5F5',
     surface: '#FFFFFF',
     text: '#212121',

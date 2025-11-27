@@ -54,7 +54,7 @@ export default function EditProfile() {
             Alert.alert(
                 'Success',
                 'Profile updated successfully',
-                [{ text: 'OK', onPress: () => router.back() }]
+                [{ text: 'OK', onPress: () => router.push('/(shared)/profile') }]
             );
         } catch (error: any) {
             Alert.alert('Error', error.message);
@@ -66,7 +66,7 @@ export default function EditProfile() {
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                <TouchableOpacity onPress={() => router.push('/(shared)/profile')} style={styles.backButton}>
                     <Ionicons name="arrow-back" size={24} color={COLORS.text} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Edit Profile</Text>

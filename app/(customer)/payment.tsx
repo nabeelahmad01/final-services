@@ -37,7 +37,7 @@ export default function Payment() {
                 [
                     {
                         text: 'OK',
-                        onPress: () => router.back(),
+                        onPress: () => router.push('/(customer)/home'),
                     },
                 ]
             );

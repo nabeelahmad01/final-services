@@ -268,7 +268,7 @@ export default function ServiceRequest() {
 
                         <Button
                             title="Cancel"
-                            onPress={() => router.back()}
+                            onPress={() => router.push('/(customer)/home')}
                             variant="outline"
                         />
                     </View>

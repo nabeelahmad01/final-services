@@ -19,7 +19,7 @@ export default function CustomerHistory() {
             <ScrollView contentContainerStyle={styles.scrollContent}>
                 {/* Header */}
                 <View style={styles.header}>
-                    <TouchableOpacity onPress={() => router.back()}>
+                    <TouchableOpacity onPress={() => router.push('/(customer)/home')}>
                         <Ionicons name="arrow-back" size={24} color={COLORS.text} />
                     </TouchableOpacity>
                     <Text style={styles.headerTitle}>Service History</Text>

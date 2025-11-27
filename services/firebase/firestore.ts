@@ -186,9 +186,92 @@ export const getMechanic = async (id: string): Promise<Mechanic | null> => {
     } as Mechanic;
 };
 
+
 export const updateMechanic = async (id: string, updates: Partial<Mechanic>) => {
     await updateDoc(doc(firestore, 'mechanics', id), updates);
 };
+
+// Get nearby mechanics
+export const getNearbyMechanics = async (
+    userLocation: { latitude: number; longitude: number },
+    category?: ServiceCategory,
+    radiusKm: number = 10
+): Promise<Mechanic[]> => {
+    try {
+        // Build query constraints
+        const constraints: QueryConstraint[] = [
+            where('kycStatus', '==', 'approved'),
+            where('isVerified', '==', true),
+            limit(50)
+        ];
+
+        // Add category filter if provided
+        if (category) {
+            constraints.push(where('categories', 'array-contains', category));
+        }
+
+        const q = query(
+            collection(firestore, 'mechanics'),
+            ...constraints
+        );
+
+        const snapshot = await getDocs(q);
+        const mechanics = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            createdAt: doc.data().createdAt.toDate(),
+        })) as Mechanic[];
+
+        // Filter by distance and calculate distance for each mechanic
+        const mechanicsWithDistance = mechanics
+            .filter(mechanic => mechanic.location) // Only include mechanics with location
+            .map(mechanic => {
+                const distance = calculateDistanceHelper(
+                    userLocation.latitude,
+                    userLocation.longitude,
+                    mechanic.location!.latitude,
+                    mechanic.location!.longitude
+                );
+                return { ...mechanic, distance };
+            })
+            .filter(mechanic => mechanic.distance <= radiusKm)
+            .sort((a, b) => a.distance - b.distance);
+
+        return mechanicsWithDistance;
+    } catch (error) {
+        console.error('Error fetching nearby mechanics:', error);
+        return [];
+    }
+};
+
+// Helper function to calculate distance between two coordinates (Haversine formula)
+const calculateDistanceHelper = (
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number
+): number => {
+    const R = 6371; // Earth's radius in km
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+
+    const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat1)) *
+        Math.cos(toRad(lat2)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const distance = R * c;
+
+    return Math.round(distance * 10) / 10; // Round to 1 decimal
+};
+
+const toRad = (value: number): number => {
+    return (value * Math.PI) / 180;
+};
+
 
 export const updateMechanicDiamonds = async (
     mechanicId: string,
