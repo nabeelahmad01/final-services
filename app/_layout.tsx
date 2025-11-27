@@ -13,6 +13,7 @@ import {
     PlusJakartaSans_700Bold,
 } from '@expo-google-fonts/plus-jakarta-sans';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
+import { ModalProvider } from '@/utils/modalService';
 
 export default function RootLayout() {
     const { setUser, setLoading } = useAuthStore();
@@ -50,7 +51,7 @@ export default function RootLayout() {
     }
 
     return (
-        <>
+        <ModalProvider>
             <StatusBar style="dark" />
             <Stack screenOptions={{ headerShown: false }}>
                 <Stack.Screen name="index" />
@@ -59,6 +60,7 @@ export default function RootLayout() {
                 <Stack.Screen name="(mechanic)" />
                 <Stack.Screen name="(shared)" />
             </Stack>
-        </>
+        </ModalProvider>
     );
 }
+

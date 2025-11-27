@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, RefreshControl, TouchableOpacity, StyleSheet, Platform, Dimensions, Alert } from 'react-native';
+import { View, Text, ScrollView, RefreshControl, TouchableOpacity, StyleSheet, Platform, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,6 +9,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useBookingStore } from '@/stores/bookingStore';
 import { useNotifications } from '@/stores/useNotifications';
 import { subscribeToActiveBooking, getNearbyMechanics } from '@/services/firebase/firestore';
+import { useModal, showInfoModal } from '@/utils/modalService';
 import { COLORS, SIZES, CATEGORIES } from '@/constants/theme';
 import { CUSTOM_MAP_STYLE_LIGHT } from '@/constants/mapStyles';
 import { ServiceCategory, Mechanic } from '@/types';
@@ -51,6 +52,7 @@ export default function CustomerHome() {
     const router = useRouter();
     const { user } = useAuthStore();
     const { activeBooking, setActiveBooking } = useBookingStore();
+    const { showModal } = useModal();
     const [refreshing, setRefreshing] = useState(false);
     const [loading, setLoading] = useState(true);
     const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -79,10 +81,10 @@ export default function CustomerHome() {
             const { status } = await Location.requestForegroundPermissionsAsync();
 
             if (status !== 'granted') {
-                Alert.alert(
+                showInfoModal(
+                    showModal,
                     'Location Permission',
-                    'Please enable location permissions to see nearby mechanics',
-                    [{ text: 'OK' }]
+                    'Please enable location permissions to see nearby mechanics'
                 );
                 return;
             }
@@ -442,7 +444,7 @@ const styles = StyleSheet.create({
     },
     greeting: {
         fontSize: SIZES.base,
-        color: COLORS.textSecond,
+        color: COLORS.textSecondary,
     },
     userName: {
         fontSize: 24,

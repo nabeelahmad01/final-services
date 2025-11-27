@@ -1,4 +1,4 @@
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, Input } from '@/components';
@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { signUp } from '@/services/firebase/authService';
+import { useModal, showErrorModal } from '@/utils/modalService';
 import { COLORS, SIZES } from '@/constants/theme';
 import { UserRole } from '@/types';
 
@@ -14,6 +15,7 @@ export default function SignUp() {
     const params = useLocalSearchParams();
     const role = (params.role as UserRole) || 'customer';
     const { setUser } = useAuthStore();
+    const { showModal } = useModal();
 
     const [name, setName] = useState('');
     const [phone, setPhone] = useState('');
@@ -24,17 +26,17 @@ export default function SignUp() {
 
     const handleSignup = async () => {
         if (!name || !phone || !email || !password || !confirmPassword) {
-            Alert.alert('Error', 'Please fill all fields');
+            showErrorModal(showModal, 'Error', 'Please fill all fields');
             return;
         }
 
         if (password !== confirmPassword) {
-            Alert.alert('Error', 'Passwords do not match');
+            showErrorModal(showModal, 'Error', 'Passwords do not match');
             return;
         }
 
         if (password.length < 6) {
-            Alert.alert('Error', 'Password must be at least 6 characters');
+            showErrorModal(showModal, 'Error', 'Password must be at least 6 characters');
             return;
         }
 
@@ -50,7 +52,7 @@ export default function SignUp() {
                 router.replace('/(customer)/home');
             }
         } catch (error: any) {
-            Alert.alert('Signup Failed', error.message);
+            showErrorModal(showModal, 'Signup Failed', error.message);
         } finally {
             setLoading(false);
         }

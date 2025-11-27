@@ -6,7 +6,6 @@ import {
     ScrollView,
     TouchableOpacity,
     Image,
-    Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -16,10 +15,12 @@ import { COLORS, SIZES } from '@/constants/theme';
 import { useAuthStore } from '@/stores/authStore';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { useModal, showErrorModal, showSuccessModal } from '@/utils/modalService';
 
 export default function EditProfile() {
     const router = useRouter();
     const { user } = useAuthStore();
+    const { showModal } = useModal();
     const [loading, setLoading] = useState(false);
 
     const [name, setName] = useState(user?.name || '');
@@ -41,7 +42,7 @@ export default function EditProfile() {
 
     const handleSave = async () => {
         if (!name.trim()) {
-            Alert.alert('Error', 'Name is required');
+            showErrorModal(showModal, 'Error', 'Name is required');
             return;
         }
 
@@ -51,13 +52,14 @@ export default function EditProfile() {
             // TODO: Upload profile pic to Firebase Storage if changed
             // TODO: Update user document in Firestore
 
-            Alert.alert(
+            showSuccessModal(
+                showModal,
                 'Success',
                 'Profile updated successfully',
-                [{ text: 'OK', onPress: () => router.push('/(shared)/profile') }]
+                () => router.push('/(shared)/profile')
             );
         } catch (error: any) {
-            Alert.alert('Error', error.message);
+            showErrorModal(showModal, 'Error', error.message);
         } finally {
             setLoading(false);
         }

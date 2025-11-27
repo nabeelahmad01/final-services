@@ -5,7 +5,6 @@ import {
     StyleSheet,
     ScrollView,
     TouchableOpacity,
-    Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -13,12 +12,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { Button } from '@/components/ui/Button';
 import { updateMechanic } from '@/services/firebase/firestore';
 import { useAuthStore } from '@/stores/authStore';
+import { useModal, showErrorModal } from '@/utils/modalService';
 import { COLORS, SIZES, CATEGORIES } from '@/constants/theme';
 import { ServiceCategory } from '@/types';
 
 export default function MechanicCategories() {
     const router = useRouter();
     const { user } = useAuthStore();
+    const { showModal } = useModal();
     const [selectedCategories, setSelectedCategories] = useState<ServiceCategory[]>([]);
     const [loading, setLoading] = useState(false);
 
@@ -32,7 +33,7 @@ export default function MechanicCategories() {
 
     const handleContinue = async () => {
         if (selectedCategories.length === 0) {
-            Alert.alert('Error', 'Please select at least one category');
+            showErrorModal(showModal, 'Error', 'Please select at least one category');
             return;
         }
 
@@ -47,7 +48,7 @@ export default function MechanicCategories() {
             // Navigate to mechanic dashboard
             router.replace('/(mechanic)/dashboard');
         } catch (error: any) {
-            Alert.alert('Error', error.message);
+            showErrorModal(showModal, 'Error', error.message);
         } finally {
             setLoading(false);
         }

@@ -5,7 +5,6 @@ import {
     StyleSheet,
     ScrollView,
     TouchableOpacity,
-    Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -15,25 +14,25 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { useAuthStore } from '@/stores/authStore';
 import { signOut } from '@/services/firebase/authService';
+import { useModal, showConfirmModal } from '@/utils/modalService';
 import { COLORS, SIZES, FONTS } from '@/constants/theme';
 
 export default function ProfileScreen() {
     const router = useRouter();
     const { user, logout } = useAuthStore();
+    const { showModal } = useModal();
 
     const handleLogout = () => {
-        Alert.alert('Logout', 'Are you sure you want to logout?', [
-            { text: 'Cancel', style: 'cancel' },
-            {
-                text: 'Logout',
-                style: 'destructive',
-                onPress: async () => {
-                    await signOut();
-                    logout();
-                    router.replace('/(auth)/role-selection');
-                },
-            },
-        ]);
+        showConfirmModal(
+            showModal,
+            'Logout',
+            'Are you sure you want to logout?',
+            async () => {
+                await signOut();
+                logout();
+                router.replace('/(auth)/role-selection');
+            }
+        );
     };
 
     if (!user) return null;

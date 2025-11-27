@@ -1,16 +1,18 @@
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Button, Input } from '@/components';
 import { signIn } from '@/services/firebase/authService';
 import { useAuthStore } from '@/stores/authStore';
+import { useModal, showErrorModal } from '@/utils/modalService';
 import { COLORS, SIZES } from '@/constants/theme';
 
 export default function Login() {
     const router = useRouter();
     const { setUser } = useAuthStore();
+    const { showModal } = useModal();
 
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -19,7 +21,7 @@ export default function Login() {
 
     const handleLogin = async () => {
         if (!email || !password) {
-            Alert.alert('Error', 'Please fill all fields');
+            showErrorModal(showModal, 'Error', 'Please fill all fields');
             return;
         }
 
@@ -35,7 +37,7 @@ export default function Login() {
                 router.replace('/(mechanic)/dashboard');
             }
         } catch (error: any) {
-            Alert.alert('Login Failed', error.message);
+            showErrorModal(showModal, 'Login Failed', error.message);
         } finally {
             setLoading(false);
         }
