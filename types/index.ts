@@ -174,3 +174,13 @@ export interface Location {
     speed?: number;
     timestamp: number;
 }
+
+export interface Review {
+    id: string;
+    bookingId: string;
+    mechanicId: string;
+    customerId: string;
+    rating: number;
+    comment: string;
+    createdAt: any; // Firestore Timestamp
+}

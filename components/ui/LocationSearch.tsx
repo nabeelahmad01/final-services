@@ -14,7 +14,7 @@ import * as Location from 'expo-location';
 import { COLORS, SIZES } from '@/constants/theme';
 
 // Google Places API key - should be in env vars
-const GOOGLE_PLACES_API_KEY = '42ce295d465c1abd16bf7c4a887f09b6c2ebe48a'; // TODO: Add to env
+const GOOGLE_PLACES_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
 
 interface LocationSuggestion {
     placeId: string;

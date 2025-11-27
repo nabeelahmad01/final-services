@@ -16,7 +16,12 @@ import { useAuthStore } from '@/stores/authStore';
 import { signOut } from '@/services/firebase/authService';
 import { Card } from '@/components/ui/Card';
 
+import { useTranslation } from 'react-i18next';
+import { useThemeStore } from '@/stores/themeStore';
+
 export default function Settings() {
+    const { t, i18n } = useTranslation();
+    const { mode, setMode } = useThemeStore();
     const router = useRouter();
     const { setUser } = useAuthStore();
     const [pushNotifications, setPushNotifications] = useState(true);
@@ -192,9 +197,25 @@ export default function Settings() {
                 <Card style={styles.card}>
                     <SettingItem
                         icon="globe-outline"
-                        title="Language"
-                        subtitle="English"
-                        onPress={() => Alert.alert('Language', 'Language selection will be available soon')}
+                        title={t('settings.language')}
+                        subtitle={i18n.language === 'ur' ? 'Urdu' : 'English'}
+                        onPress={() => {
+                            Alert.alert(
+                                t('settings.language'),
+                                'Select your preferred language',
+                                [
+                                    {
+                                        text: 'English',
+                                        onPress: () => i18n.changeLanguage('en'),
+                                    },
+                                    {
+                                        text: 'Urdu',
+                                        onPress: () => i18n.changeLanguage('ur'),
+                                    },
+                                    { text: t('common.cancel'), style: 'cancel' },
+                                ]
+                            );
+                        }}
                     />
                 </Card>
 

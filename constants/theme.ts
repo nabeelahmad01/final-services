@@ -1,4 +1,4 @@
-export const COLORS = {
+export const LIGHT_COLORS = {
     primary: '#00ACC1',
     primaryDark: '#00838F',
     primaryLight: '#26C6DA',
@@ -17,6 +17,19 @@ export const COLORS = {
     white: '#FFFFFF',
     black: '#000000',
 };
+
+export const DARK_COLORS = {
+    ...LIGHT_COLORS,
+    background: '#121212',
+    surface: '#1E1E1E',
+    text: '#E0E0E0',
+    textSecondary: '#B0B0B0',
+    border: '#333333',
+    white: '#FFFFFF', // Keep white as white for text on primary buttons etc
+    black: '#000000',
+};
+
+export const COLORS = LIGHT_COLORS; // Backward compatibility
 
 export const FONTS = {
     light: 'PlusJakartaSans_300Light',

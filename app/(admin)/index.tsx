@@ -35,7 +35,7 @@ export default function AdminLogin() {
             Alert.alert('Success', 'Welcome Admin!', [
                 {
                     text: 'OK',
-                    onPress: () => router.replace('/(admin)/kyc-verification'),
+                    onPress: () => router.replace('/(admin)/dashboard'),
                 },
             ]);
         } else {

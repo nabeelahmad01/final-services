@@ -6,16 +6,20 @@ import { Ionicons } from '@expo/vector-icons';
 import { Button, Card } from '@/components';
 import { Rating } from '@/components/ui/Rating';
 import { COLORS, SIZES, FONTS } from '@/constants/theme';
+import { addReview } from '@/services/firebase/reviewService';
+import { useAuthStore } from '@/stores/authStore';
 
 export default function LeaveReview() {
     const router = useRouter();
     const params = useLocalSearchParams();
+    const { user } = useAuthStore();
     const [rating, setRating] = useState(0);
     const [review, setReview] = useState('');
     const [loading, setLoading] = useState(false);
 
     const bookingId = params.bookingId as string;
     const mechanicName = params.mechanicName as string || 'Mechanic';
+    const mechanicId = params.mechanicId as string;
 
     const handleSubmit = async () => {
         if (rating === 0) {
@@ -25,8 +29,13 @@ export default function LeaveReview() {
 
         setLoading(true);
         try {
-            // TODO: Submit review to Firestore
-            await new Promise(resolve => setTimeout(resolve, 1500));
+            await addReview(
+                bookingId || 'test-booking',
+                mechanicId || 'test-mechanic',
+                user?.id || 'anonymous',
+                rating,
+                review
+            );
 
             Alert.alert(
                 'Review Submitted',
@@ -39,7 +48,8 @@ export default function LeaveReview() {
                 ]
             );
         } catch (error: any) {
-            Alert.alert('Error', error.message);
+            console.error('Review error:', error);
+            Alert.alert('Error', 'Failed to submit review');
         } finally {
             setLoading(false);
         }

@@ -5,10 +5,13 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, Card } from '@/components';
 import { COLORS, SIZES, FONTS } from '@/constants/theme';
+import { processPayment } from '@/services/payment/paymentService';
+import { useAuthStore } from '@/stores/authStore';
 
 export default function Payment() {
     const router = useRouter();
     const params = useLocalSearchParams();
+    const { user } = useAuthStore();
     const [selectedMethod, setSelectedMethod] = useState<'jazzcash' | 'easypaisa' | null>(null);
     const [phoneNumber, setPhoneNumber] = useState('');
     const [processing, setProcessing] = useState(false);
@@ -28,19 +31,27 @@ export default function Payment() {
 
         setProcessing(true);
         try {
-            // TODO: Implement actual payment processing
-            await new Promise(resolve => setTimeout(resolve, 2000));
-
-            Alert.alert(
-                'Payment Successful',
-                'Your payment has been processed successfully',
-                [
-                    {
-                        text: 'OK',
-                        onPress: () => router.push('/(customer)/home'),
-                    },
-                ]
+            const result = await processPayment(
+                user?.id || 'anonymous',
+                amount,
+                selectedMethod,
+                phoneNumber
             );
+
+            if (result.success) {
+                Alert.alert(
+                    'Payment Successful',
+                    'Your payment has been processed successfully',
+                    [
+                        {
+                            text: 'OK',
+                            onPress: () => router.push('/(customer)/home'),
+                        },
+                    ]
+                );
+            } else {
+                Alert.alert('Payment Failed', result.error || 'Unknown error');
+            }
         } catch (error: any) {
             Alert.alert('Payment Failed', error.message);
         } finally {

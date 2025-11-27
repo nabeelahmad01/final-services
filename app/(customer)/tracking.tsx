@@ -16,7 +16,7 @@ import { useBookingStore } from '@/stores/bookingStore';
 import { subscribeToLocation } from '@/services/firebase/realtimeDb';
 import { getMechanic, updateBooking } from '@/services/firebase/firestore';
 import { getDirections, decodePolyline } from '@/services/location/locationService';
-import { createOrGetChat } from '@/services/firebase/firestore';
+import { createChat } from '@/services/firebase/chatService';
 import { COLORS, SIZES } from '@/constants/theme';
 import { Mechanic } from '@/types';
 import { MapView, Marker, Polyline, PROVIDER_GOOGLE } from '@/utils/mapHelpers';
@@ -75,12 +75,14 @@ export default function TrackingScreen() {
     };
 
     const handleChat = async () => {
-        if (!user || !mechanic) return;
-        const chatId = await createOrGetChat(user.id, mechanic.id);
-        router.push({
-            pathname: '/(shared)/chat',
-            params: { chatId },
-        });
+        if (!user || !mechanic || !activeBooking) return;
+        try {
+            const chatId = await createChat([user.id, mechanic.id], activeBooking.id);
+            router.push(`/(shared)/chat/${chatId}`);
+        } catch (error) {
+            console.error('Error opening chat:', error);
+            Alert.alert('Error', 'Could not open chat');
+        }
     };
 
     const handleCancelRide = () => {

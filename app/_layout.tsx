@@ -14,6 +14,7 @@ import {
 } from '@expo-google-fonts/plus-jakarta-sans';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { ModalProvider } from '@/utils/modalService';
+import '@/utils/i18n';
 
 export default function RootLayout() {
     const { setUser, setLoading } = useAuthStore();

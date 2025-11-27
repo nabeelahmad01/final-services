@@ -48,8 +48,15 @@ const CustomMechanicMarker = ({ category }: { category?: ServiceCategory }) => {
     );
 };
 
+import { useTranslation } from 'react-i18next';
+
+import { useThemeColor } from '@/hooks/useThemeColor';
+
 export default function CustomerHome() {
+    const { t } = useTranslation();
+    const COLORS = useThemeColor();
     const router = useRouter();
+    // ... rest of component ...
     const { user } = useAuthStore();
     const { activeBooking, setActiveBooking } = useBookingStore();
     const { showModal } = useModal();
@@ -238,7 +245,7 @@ export default function CustomerHome() {
                 {/* Header */}
                 <View style={styles.header}>
                     <View>
-                        <Text style={styles.greeting}>Hello,</Text>
+                        <Text style={styles.greeting}>{t('home.greeting')},</Text>
                         <Text style={styles.userName}>{user?.name}</Text>
                     </View>
                     <View style={styles.headerIcons}>
@@ -267,16 +274,16 @@ export default function CustomerHome() {
                         <View style={styles.activeBookingContent}>
                             <Ionicons name="time-outline" size={24} color={COLORS.primary} />
                             <View style={styles.activeBookingText}>
-                                <Text style={styles.activeBookingTitle}>Active Service</Text>
+                                <Text style={styles.activeBookingTitle}>{t('home.activeService')}</Text>
                                 <Text style={styles.activeBookingSubtitle}>
-                                    Your mechanic is on the way
+                                    {t('home.mechanicOnWay')}
                                 </Text>
                             </View>
                             <TouchableOpacity
                                 style={styles.trackButton}
                                 onPress={() => router.push('/(customer)/tracking')}
                             >
-                                <Text style={styles.trackButtonText}>Track</Text>
+                                <Text style={styles.trackButtonText}>{t('home.track')}</Text>
                                 <Ionicons name="arrow-forward" size={16} color={COLORS.white} />
                             </TouchableOpacity>
                         </View>
@@ -287,9 +294,9 @@ export default function CustomerHome() {
                 <View style={styles.section}>
                     <View style={styles.sectionHeader}>
                         <View>
-                            <Text style={styles.sectionTitle}>Nearby Mechanics</Text>
+                            <Text style={styles.sectionTitle}>{t('home.nearbyMechanics')}</Text>
                             <Text style={styles.sectionSubtitle}>
-                                {nearbyMechanics.length} verified mechanics nearby
+                                {nearbyMechanics.length} {t('home.verifiedMechanics')}
                             </Text>
                         </View>
                         {userLocation && (
@@ -366,17 +373,17 @@ export default function CustomerHome() {
                     ) : userLocation ? (
                         <View style={styles.emptyState}>
                             <Ionicons name="search-outline" size={48} color={COLORS.textSecondary} />
-                            <Text style={styles.emptyStateText}>No mechanics found nearby</Text>
-                            <Text style={styles.emptyStateSubtext}>Try adjusting your filters</Text>
+                            <Text style={styles.emptyStateText}>{t('home.noMechanicsFound')}</Text>
+                            <Text style={styles.emptyStateSubtext}>{t('home.adjustFilters')}</Text>
                         </View>
                     ) : null}
                 </View>
 
                 {/* Services Section */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>What do you need?</Text>
+                    <Text style={styles.sectionTitle}>{t('home.whatDoYouNeed')}</Text>
                     <Text style={styles.sectionSubtitle}>
-                        Select a service category to get started
+                        {t('home.selectService')}
                     </Text>
 
                     <View style={styles.categoriesGrid}>
@@ -407,7 +414,7 @@ export default function CustomerHome() {
 
                 {/* Quick Actions */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Quick Actions</Text>
+                    <Text style={styles.sectionTitle}>{t('home.quickActions')}</Text>
 
                     <TouchableOpacity
                         style={styles.actionCard}
@@ -417,8 +424,8 @@ export default function CustomerHome() {
                             <Ionicons name="time-outline" size={24} color={COLORS.primary} />
                         </View>
                         <View style={styles.actionContent}>
-                            <Text style={styles.actionTitle}>Service History</Text>
-                            <Text style={styles.actionSubtitle}>View past services</Text>
+                            <Text style={styles.actionTitle}>{t('home.serviceHistory')}</Text>
+                            <Text style={styles.actionSubtitle}>{t('home.viewPastServices')}</Text>
                         </View>
                         <Ionicons name="chevron-forward" size={24} color={COLORS.textSecondary} />
                     </TouchableOpacity>
