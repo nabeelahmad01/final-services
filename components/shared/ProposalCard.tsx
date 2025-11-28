@@ -32,7 +32,7 @@ export const ProposalCard = ({ proposal, onAccept, onDecline, accepting }: Propo
 
             {/* Mechanic Info */}
             <View style={styles.mechanicInfo}>
-                <Avatar name={proposal.mechanicName} size={40} image={proposal.mechanicPhoto} />
+                <Avatar name={proposal.mechanicName} size={40} uri={proposal.mechanicPhoto} />
                 <View style={styles.mechanicDetails}>
                     <View style={styles.nameRow}>
                         <Text style={styles.name}>{proposal.mechanicName}</Text>
