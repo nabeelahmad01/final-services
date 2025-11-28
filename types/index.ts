@@ -86,6 +86,8 @@ export interface Proposal {
 export interface Booking {
     id: string;
     customerId: string;
+    customerName?: string;
+    customerPhoto?: string;
     mechanicId: string;
     requestId: string;
     proposalId: string;

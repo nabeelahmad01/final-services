@@ -12,7 +12,7 @@ import { TouchableOpacity } from 'react-native';
 import { useThemeColor } from '@/hooks/useThemeColor';
 
 export default function ChatScreen() {
-    const COLORS = useThemeColor();
+    const themeColors = useThemeColor();
     const router = useRouter();
     // ... rest of component ...
     const { id } = useLocalSearchParams(); // Chat ID
@@ -56,20 +56,20 @@ export default function ChatScreen() {
                 {...props}
                 wrapperStyle={{
                     right: {
-                        backgroundColor: COLORS.primary,
+                        backgroundColor: themeColors.primary,
                     },
                     left: {
-                        backgroundColor: COLORS.surface,
+                        backgroundColor: themeColors.surface,
                         borderWidth: 1,
-                        borderColor: COLORS.border,
+                        borderColor: themeColors.border,
                     },
                 }}
                 textStyle={{
                     right: {
-                        color: COLORS.white,
+                        color: themeColors.white,
                     },
                     left: {
-                        color: COLORS.text,
+                        color: themeColors.text,
                     },
                 }}
             />
@@ -80,7 +80,7 @@ export default function ChatScreen() {
         return (
             <Send {...props}>
                 <View style={styles.sendButton}>
-                    <Ionicons name="send" size={24} color={COLORS.primary} />
+                    <Ionicons name="send" size={24} color={themeColors.primary} />
                 </View>
             </Send>
         );
@@ -89,7 +89,7 @@ export default function ChatScreen() {
     if (loading) {
         return (
             <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color={COLORS.primary} />
+                <ActivityIndicator size="large" color={themeColors.primary} />
             </View>
         );
     }
@@ -98,7 +98,7 @@ export default function ChatScreen() {
         <SafeAreaView style={styles.container} edges={['top']}>
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color={COLORS.text} />
+                    <Ionicons name="arrow-back" size={24} color={themeColors.text} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Chat</Text>
                 <View style={{ width: 40 }} />
@@ -113,9 +113,6 @@ export default function ChatScreen() {
                 }}
                 renderBubble={renderBubble}
                 renderSend={renderSend}
-                alwaysShowSend
-                scrollToBottom
-                infiniteScroll
             />
         </SafeAreaView>
     );

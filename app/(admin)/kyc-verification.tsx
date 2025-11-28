@@ -3,7 +3,6 @@ import {
     View,
     Text,
     StyleSheet,
-    SafeAreaView,
     FlatList,
     TouchableOpacity,
     Alert,
@@ -16,6 +15,8 @@ import { COLORS, SIZES } from '@/constants/theme';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
 
 interface KYCRequest {
     id: string;
@@ -67,6 +68,11 @@ export default function AdminKYCVerification() {
     };
 
     const handleApprove = async (request: KYCRequest) => {
+        if (!request.mechanicId) {
+            Alert.alert('Error', 'Invalid mechanic ID');
+            return;
+        }
+
         Alert.alert(
             'Approve KYC',
             `Approve KYC for ${request.mechanicName}?`,
@@ -103,6 +109,11 @@ export default function AdminKYCVerification() {
     };
 
     const handleReject = async (request: KYCRequest) => {
+        if (!request.mechanicId) {
+            Alert.alert('Error', 'Invalid mechanic ID');
+            return;
+        }
+
         Alert.alert(
             'Reject KYC',
             `Reject KYC for ${request.mechanicName}? They can resubmit.`,
@@ -214,7 +225,7 @@ export default function AdminKYCVerification() {
                     loading={processing === item.id}
                     disabled={processing !== null}
                     variant="outline"
-                    style={[styles.button, { borderColor: COLORS.danger }]}
+                    style={{ ...styles.button, borderColor: COLORS.danger }}
                     textStyle={{ color: COLORS.danger }}
                 />
                 <Button

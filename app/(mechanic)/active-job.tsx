@@ -89,7 +89,7 @@ export default function ActiveJob() {
 
                     <View style={styles.locationInfo}>
                         <Ionicons name="location" size={24} color={COLORS.primary} />
-                        <Text style={styles.address}>{activeBooking.customerLocation.address}</Text>
+                        <Text style={styles.address}>{activeBooking.customerLocation?.address || 'Address not available'}</Text>
                     </View>
 
                     <View style={styles.actionButtons}>
