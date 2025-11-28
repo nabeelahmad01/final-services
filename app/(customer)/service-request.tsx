@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     View,
     Text,
@@ -9,10 +9,12 @@ import {
     KeyboardAvoidingView,
     Platform,
     ActivityIndicator,
+    TextInput,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
+import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useAuthStore } from '@/stores/authStore';
@@ -27,6 +29,7 @@ export default function ServiceRequest() {
     const params = useLocalSearchParams();
     const category = (params.category as ServiceCategory) || 'car_mechanic';
     const { user } = useAuthStore();
+    const mapRef = useRef<any>(null);
 
     const [description, setDescription] = useState('');
     const [location, setLocation] = useState({
@@ -59,6 +62,7 @@ export default function ServiceRequest() {
             };
 
             setLocation(newLocation);
+            animateToLocation(newLocation);
 
             // Get address from coordinates
             const addressData = await Location.reverseGeocodeAsync(newLocation);
@@ -71,6 +75,29 @@ export default function ServiceRequest() {
             console.error('Location error:', error);
         } finally {
             setLoadingLocation(false);
+        }
+    };
+
+    const animateToLocation = (coords: { latitude: number; longitude: number }) => {
+        if (mapRef.current && Platform.OS !== 'web') {
+            mapRef.current.animateToRegion({
+                ...coords,
+                latitudeDelta: 0.01,
+                longitudeDelta: 0.01,
+            }, 1000);
+        }
+    };
+
+    const handlePlaceSelect = async (data: any, details: any) => {
+        if (details?.geometry?.location) {
+            const newLocation = {
+                latitude: details.geometry.location.lat,
+                longitude: details.geometry.location.lng,
+            };
+
+            setLocation(newLocation);
+            setAddress(details.formatted_address || data.description);
+            animateToLocation(newLocation);
         }
     };
 
@@ -138,6 +165,139 @@ export default function ServiceRequest() {
         }
     };
 
+    const renderMap = () => {
+        if (Platform.OS === 'web') {
+            return (
+                <View style={styles.webLocationContainer}>
+                    <Input
+                        value={address}
+                        onChangeText={setAddress}
+                        placeholder="Enter your address"
+                    />
+                    <TouchableOpacity
+                        style={styles.getCurrentLocationBtn}
+                        onPress={getCurrentLocation}
+                    >
+                        <Ionicons name="locate" size={20} color={COLORS.white} />
+                        <Text style={styles.getCurrentLocationText}>Use Current Location</Text>
+                    </TouchableOpacity>
+                </View>
+            );
+        }
+
+        if (loadingLocation) {
+            return (
+                <View style={styles.mapPlaceholder}>
+                    <ActivityIndicator size="large" color={COLORS.primary} />
+                    <Text style={styles.loadingText}>Getting your location...</Text>
+                </View>
+            );
+        }
+
+        if (!MapView) {
+            return (
+                <View style={styles.mapPlaceholder}>
+                    <Text style={styles.loadingText}>Map not available</Text>
+                </View>
+            );
+        }
+
+        return (
+            <>
+                <MapView
+                    ref={mapRef}
+                    provider={PROVIDER_GOOGLE}
+                    style={styles.map}
+                    initialRegion={{
+                        ...location,
+                        latitudeDelta: 0.01,
+                        longitudeDelta: 0.01,
+                    }}
+                    onPress={handleMapPress}
+                >
+                    {Marker && (
+                        <Marker
+                            coordinate={location}
+                            title="Service Location"
+                            pinColor={COLORS.primary}
+                        />
+                    )}
+                </MapView>
+
+                {/* Search overlay on map */}
+                <View style={styles.searchOverlay}>
+                    <GooglePlacesAutocomplete
+                        placeholder="Search location..."
+                        fetchDetails={true}
+                        onPress={handlePlaceSelect}
+                        query={{
+                            key: process.env.EXPO_PUBLIC_GOOGLE_API_KEY || '',
+                            language: 'en',
+                            components: 'country:pk', // Pakistan only
+                        }}
+                        styles={{
+                            container: {
+                                flex: 0,
+                            },
+                            textInputContainer: {
+                                backgroundColor: COLORS.surface,
+                                borderRadius: 12,
+                                paddingHorizontal: 12,
+                                shadowColor: '#000',
+                                shadowOffset: { width: 0, height: 2 },
+                                shadowOpacity: 0.15,
+                                shadowRadius: 8,
+                                elevation: 5,
+                            },
+                            textInput: {
+                                backgroundColor: COLORS.surface,
+                                color: COLORS.text,
+                                fontSize: 16,
+                                height: 44,
+                            },
+                            listView: {
+                                backgroundColor: COLORS.surface,
+                                borderRadius: 12,
+                                marginTop: 8,
+                                shadowColor: '#000',
+                                shadowOffset: { width: 0, height: 2 },
+                                shadowOpacity: 0.15,
+                                shadowRadius: 8,
+                                elevation: 5,
+                            },
+                            row: {
+                                backgroundColor: COLORS.surface,
+                                padding: 13,
+                                height: 'auto',
+                                minHeight: 50,
+                            },
+                            separator: {
+                                height: 1,
+                                backgroundColor: COLORS.border,
+                            },
+                            description: {
+                                color: COLORS.text,
+                            },
+                            poweredContainer: {
+                                display: 'none',
+                            },
+                        }}
+                        enablePoweredByContainer={false}
+                        nearbyPlacesAPI="GooglePlacesSearch"
+                        debounce={400}
+                    />
+                </View>
+
+                <TouchableOpacity
+                    style={styles.currentLocationButton}
+                    onPress={getCurrentLocation}
+                >
+                    <Ionicons name="locate" size={24} color={COLORS.white} />
+                </TouchableOpacity>
+            </>
+        );
+    };
+
     return (
         <SafeAreaView style={styles.container}>
             <KeyboardAvoidingView
@@ -147,6 +307,7 @@ export default function ServiceRequest() {
                 <ScrollView
                     contentContainerStyle={styles.scrollContent}
                     showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
                 >
                     {/* Header */}
                     <View style={styles.header}>
@@ -177,58 +338,12 @@ export default function ServiceRequest() {
                         </View>
                     </View>
 
-                    {/* Map or Location Input */}
-                    <View style={styles.mapContainer}>
-                        <Text style={styles.mapLabel}>Service Location</Text>
-                        {Platform.OS === 'web' ? (
-                            <View style={styles.webLocationContainer}>
-                                <Input
-                                    value={address}
-                                    onChangeText={setAddress}
-                                    placeholder="Enter your address"
-                                />
-                                <TouchableOpacity
-                                    style={styles.getCurrentLocationBtn}
-                                    onPress={getCurrentLocation}
-                                >
-                                    <Ionicons name="locate" size={20} color={COLORS.white} />
-                                    <Text style={styles.getCurrentLocationText}>Use Current Location</Text>
-                                </TouchableOpacity>
-                            </View>
-                        ) : loadingLocation ? (
-                            <View style={styles.mapPlaceholder}>
-                                <ActivityIndicator size="large" color={COLORS.primary} />
-                                <Text style={styles.loadingText}>Getting your location...</Text>
-                            </View>
-                        ) : MapView ? (
-                            <MapView
-                                provider={PROVIDER_GOOGLE}
-                                style={styles.map}
-                                initialRegion={{
-                                    ...location,
-                                    latitudeDelta: 0.01,
-                                    longitudeDelta: 0.01,
-                                }}
-                                onPress={handleMapPress}
-                            >
-                                {Marker && (
-                                    <Marker
-                                        coordinate={location}
-                                        title="Service Location"
-                                        pinColor={COLORS.primary}
-                                    />
-                                )}
-                            </MapView>
-                        ) : null}
-
-                        {Platform.OS !== 'web' && !loadingLocation && (
-                            <TouchableOpacity
-                                style={styles.currentLocationButton}
-                                onPress={getCurrentLocation}
-                            >
-                                <Ionicons name="locate" size={24} color={COLORS.white} />
-                            </TouchableOpacity>
-                        )}
+                    {/* Map with Search */}
+                    <View style={styles.mapSection}>
+                        <Text style={styles.sectionLabel}>Service Location</Text>
+                        <View style={styles.mapContainer}>
+                            {renderMap()}
+                        </View>
                     </View>
 
                     {/* Address Display */}
@@ -248,6 +363,7 @@ export default function ServiceRequest() {
                                 value={description}
                                 onChangeText={setDescription}
                                 style={styles.textArea}
+                                multiline
                             />
                         </View>
 
@@ -293,7 +409,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: 24,
+        marginBottom: 20,
     },
     headerTitle: {
         fontSize: 20,
@@ -305,9 +421,14 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         backgroundColor: COLORS.surface,
         padding: 16,
-        borderRadius: 12,
+        borderRadius: 16,
         marginBottom: 24,
         gap: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+        elevation: 3,
     },
     categoryIcon: {
         width: 60,
@@ -326,33 +447,45 @@ const styles = StyleSheet.create({
         color: COLORS.text,
         marginTop: 4,
     },
-    mapContainer: {
+    mapSection: {
         marginBottom: 16,
-        position: 'relative',
     },
-    mapLabel: {
-        fontSize: SIZES.sm,
+    sectionLabel: {
+        fontSize: SIZES.base,
         fontWeight: '600',
         color: COLORS.text,
-        marginBottom: 8,
+        marginBottom: 12,
+    },
+    mapContainer: {
+        position: 'relative',
+        height: 300,
+        borderRadius: 16,
+        overflow: 'hidden',
     },
     map: {
         width: '100%',
-        height: 250,
-        borderRadius: 12,
-        overflow: 'hidden',
+        height: '100%',
     },
     mapPlaceholder: {
         width: '100%',
-        height: 250,
-        borderRadius: 12,
+        height: '100%',
         backgroundColor: COLORS.surface,
         justifyContent: 'center',
         alignItems: 'center',
         gap: 12,
     },
+    searchOverlay: {
+        position: 'absolute',
+        top: 12,
+        left: 12,
+        right: 12,
+        zIndex: 10,
+    },
     webLocationContainer: {
         gap: 12,
+        padding: 16,
+        backgroundColor: COLORS.surface,
+        borderRadius: 12,
     },
     getCurrentLocationBtn: {
         flexDirection: 'row',
@@ -393,16 +526,21 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'flex-start',
         backgroundColor: COLORS.surface,
-        padding: 12,
-        borderRadius: 8,
-        marginBottom: 16,
-        gap: 8,
+        padding: 16,
+        borderRadius: 12,
+        marginBottom: 20,
+        gap: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 2,
     },
     addressText: {
         flex: 1,
-        fontSize: SIZES.sm,
+        fontSize: SIZES.base,
         color: COLORS.text,
-        lineHeight: 20,
+        lineHeight: 22,
     },
     form: {
         gap: 16,
@@ -411,7 +549,7 @@ const styles = StyleSheet.create({
         marginBottom: 0,
     },
     label: {
-        fontSize: SIZES.sm,
+        fontSize: SIZES.base,
         fontWeight: '600',
         color: COLORS.text,
         marginBottom: 8,

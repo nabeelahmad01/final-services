@@ -1,9 +1,16 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
-import * as Localization from 'expo-localization';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import en from './locales/en.json';
 import ur from './locales/ur.json';
+
+// Optional import for expo-localization
+let Localization: any = null;
+try {
+    Localization = require('expo-localization');
+} catch (e) {
+    console.log('expo-localization not available, using fallback');
+}
 
 const RESOURCES = {
     en: { translation: en },
@@ -24,7 +31,7 @@ const LANGUAGE_DETECTOR = {
         }
 
         // Fallback to device language or default
-        const deviceLang = Localization.getLocales()[0]?.languageCode;
+        const deviceLang = Localization?.getLocales?.()?.[0]?.languageCode;
         callback(deviceLang === 'ur' ? 'ur' : 'en');
     },
     init: () => { },

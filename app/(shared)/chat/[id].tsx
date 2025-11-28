@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, ActivityIndicator, Text } from 'react-native';
-import { GiftedChat, Bubble, Send } from 'react-native-gifted-chat';
+import { View, StyleSheet, ActivityIndicator, Text, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,14 +7,26 @@ import { COLORS, SIZES } from '@/constants/theme';
 import { useAuthStore } from '@/stores/authStore';
 import { subscribeToMessages, sendMessage } from '@/services/firebase/chatService';
 import { TouchableOpacity } from 'react-native';
-
 import { useThemeColor } from '@/hooks/useThemeColor';
+
+// Dynamic import for GiftedChat to handle native module dependencies
+let GiftedChat: any = null;
+let Bubble: any = null;
+let Send: any = null;
+
+try {
+    const giftedChatModule = require('react-native-gifted-chat');
+    GiftedChat = giftedChatModule.GiftedChat;
+    Bubble = giftedChatModule.Bubble;
+    Send = giftedChatModule.Send;
+} catch (error) {
+    console.log('GiftedChat not available:', error);
+}
 
 export default function ChatScreen() {
     const themeColors = useThemeColor();
     const router = useRouter();
-    // ... rest of component ...
-    const { id } = useLocalSearchParams(); // Chat ID
+    const { id } = useLocalSearchParams();
     const { user } = useAuthStore();
     const [messages, setMessages] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -51,6 +62,7 @@ export default function ChatScreen() {
     }, [id, user]);
 
     const renderBubble = (props: any) => {
+        if (!Bubble) return null;
         return (
             <Bubble
                 {...props}
@@ -77,6 +89,7 @@ export default function ChatScreen() {
     };
 
     const renderSend = (props: any) => {
+        if (!Send) return null;
         return (
             <Send {...props}>
                 <View style={styles.sendButton}>
@@ -91,6 +104,31 @@ export default function ChatScreen() {
             <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color={themeColors.primary} />
             </View>
+        );
+    }
+
+    // Fallback if GiftedChat is not available
+    if (!GiftedChat) {
+        return (
+            <SafeAreaView style={styles.container} edges={['top']}>
+                <View style={styles.header}>
+                    <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                        <Ionicons name="arrow-back" size={24} color={themeColors.text} />
+                    </TouchableOpacity>
+                    <Text style={styles.headerTitle}>Chat</Text>
+                    <View style={{ width: 40 }} />
+                </View>
+                <View style={styles.fallbackContainer}>
+                    <Ionicons name="chatbubbles-outline" size={80} color={COLORS.textSecondary} />
+                    <Text style={styles.fallbackTitle}>Chat Unavailable</Text>
+                    <Text style={styles.fallbackText}>
+                        Please build a development build to use the chat feature.
+                    </Text>
+                    <Text style={styles.fallbackHint}>
+                        Run: npx expo run:android
+                    </Text>
+                </View>
+            </SafeAreaView>
         );
     }
 
@@ -150,5 +188,35 @@ const styles = StyleSheet.create({
     sendButton: {
         marginBottom: 10,
         marginRight: 10,
+    },
+    fallbackContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: SIZES.padding * 2,
+    },
+    fallbackTitle: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: COLORS.text,
+        marginTop: 24,
+        marginBottom: 12,
+    },
+    fallbackText: {
+        fontSize: 16,
+        color: COLORS.textSecondary,
+        textAlign: 'center',
+        lineHeight: 24,
+    },
+    fallbackHint: {
+        fontSize: 14,
+        color: COLORS.primary,
+        textAlign: 'center',
+        marginTop: 16,
+        fontFamily: 'monospace',
+        backgroundColor: COLORS.primary + '10',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 8,
     },
 });
