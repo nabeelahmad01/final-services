@@ -1,93 +1,77 @@
 import React from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SIZES } from '@/constants/theme';
+import { Proposal } from '@/types';
+import { Avatar } from '@/components/shared/Avatar';
 
 interface ProposalCardProps {
-    mechanicName: string;
-    mechanicPhoto?: string;
-    rating: number;
-    totalJobs: number;
-    price: number;
-    estimatedTime: string;
-    distance?: number;
-    onAccept: () => void;
-    onDecline: () => void;
-    loading?: boolean;
+    proposal: Proposal;
+    onAccept: (proposal: Proposal) => void;
+    onDecline: (proposal: Proposal) => void;
+    accepting?: boolean;
 }
 
-export function ProposalCard({
-    mechanicName,
-    mechanicPhoto,
-    rating,
-    totalJobs,
-    price,
-    estimatedTime,
-    distance,
-    onAccept,
-    onDecline,
-    loading = false,
-}: ProposalCardProps) {
+export const ProposalCard = ({ proposal, onAccept, onDecline, accepting }: ProposalCardProps) => {
     return (
         <View style={styles.container}>
-            {/* Header with Price & Time */}
+            {/* Header: Price and Time */}
             <View style={styles.header}>
-                <Text style={styles.price}>PKR{price}</Text>
-                <Text style={styles.time}>{estimatedTime}</Text>
+                <View style={styles.priceContainer}>
+                    <Text style={styles.currency}>PKR</Text>
+                    <Text style={styles.price}>{proposal.price}</Text>
+                </View>
+                <Text style={styles.time}>{proposal.estimatedTime}</Text>
             </View>
 
-            {/* Badge */}
-            <View style={styles.badge}>
-                <Ionicons name="thumbs-up" size={14} color={COLORS.primary} />
-                <Text style={styles.badgeText}>Your fare</Text>
+            {/* Tag: Your fare (if matches) - Optional logic, for now static style */}
+            <View style={styles.tagContainer}>
+                <Ionicons name="thumbs-up" size={12} color={COLORS.text} />
+                <Text style={styles.tagText}>Your fare</Text>
             </View>
 
             {/* Mechanic Info */}
             <View style={styles.mechanicInfo}>
-                {mechanicPhoto ? (
-                    <Image source={{ uri: mechanicPhoto }} style={styles.avatar} />
-                ) : (
-                    <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                        <Ionicons name="person" size={24} color={COLORS.textSecondary} />
-                    </View>
-                )}
-
+                <Avatar name={proposal.mechanicName} size={40} image={proposal.mechanicPhoto} />
                 <View style={styles.mechanicDetails}>
                     <View style={styles.nameRow}>
-                        <Text style={styles.mechanicName}>{mechanicName}</Text>
+                        <Text style={styles.name}>{proposal.mechanicName}</Text>
                         <View style={styles.ratingContainer}>
-                            <Ionicons name="star" size={14} color="#FFB800" />
-                            <Text style={styles.rating}>{rating.toFixed(2)}</Text>
+                            <Ionicons name="star" size={12} color={COLORS.text} />
+                            <Text style={styles.rating}>{proposal.mechanicRating.toFixed(2)}</Text>
                         </View>
+                        <Text style={styles.rides}>{proposal.mechanicTotalRatings} rides</Text>
                     </View>
-                    <Text style={styles.stats}>{totalJobs} jobs completed</Text>
-                    {distance && (
-                        <Text style={styles.distance}>{distance.toFixed(1)} km away</Text>
-                    )}
+                    <Text style={styles.vehicleInfo}>
+                        Mechanic • {proposal.distance ? `${proposal.distance.toFixed(1)} km away` : 'Nearby'}
+                    </Text>
                 </View>
             </View>
 
-            {/* Action Buttons */}
+            {/* Actions */}
             <View style={styles.actions}>
                 <TouchableOpacity
                     style={styles.declineButton}
-                    onPress={onDecline}
-                    disabled={loading}
+                    onPress={() => onDecline(proposal)}
+                    disabled={accepting}
                 >
                     <Text style={styles.declineText}>Decline</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                    style={[styles.acceptButton, loading && styles.disabledButton]}
-                    onPress={onAccept}
-                    disabled={loading}
+                    style={styles.acceptButton}
+                    onPress={() => onAccept(proposal)}
+                    disabled={accepting}
                 >
-                    <Text style={styles.acceptText}>Accept</Text>
+                    <Text style={styles.acceptText}>
+                        {accepting ? 'Accepting...' : 'Accept'}
+                    </Text>
+                    {!accepting && <View style={styles.acceptHighlight} />}
                 </TouchableOpacity>
             </View>
         </View>
     );
-}
+};
 
 const styles = StyleSheet.create({
     container: {
@@ -98,40 +82,50 @@ const styles = StyleSheet.create({
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
+        shadowRadius: 8,
+        elevation: 4,
     },
     header: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
+        alignItems: 'baseline',
+        gap: 8,
         marginBottom: 8,
     },
+    priceContainer: {
+        flexDirection: 'row',
+        alignItems: 'baseline',
+    },
+    currency: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: COLORS.text,
+        marginRight: 2,
+    },
     price: {
-        fontSize: 28,
+        fontSize: 24,
         fontWeight: 'bold',
         color: COLORS.text,
     },
     time: {
-        fontSize: 20,
-        fontWeight: '600',
-        color: COLORS.text,
+        fontSize: 18,
+        color: COLORS.textSecondary,
+        fontWeight: '500',
     },
-    badge: {
+    tagContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: COLORS.primary + '15',
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 12,
+        backgroundColor: '#E8F5E9', // Light green
         alignSelf: 'flex-start',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
         gap: 4,
-        marginBottom: 16,
+        marginBottom: 12,
     },
-    badgeText: {
+    tagText: {
         fontSize: 12,
         fontWeight: '600',
-        color: COLORS.primary,
+        color: COLORS.text,
     },
     mechanicInfo: {
         flexDirection: 'row',
@@ -139,26 +133,16 @@ const styles = StyleSheet.create({
         gap: 12,
         marginBottom: 16,
     },
-    avatar: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-    },
-    avatarPlaceholder: {
-        backgroundColor: COLORS.border,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
     mechanicDetails: {
         flex: 1,
     },
     nameRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: 4,
+        gap: 6,
+        marginBottom: 2,
     },
-    mechanicName: {
+    name: {
         fontSize: 16,
         fontWeight: '600',
         color: COLORS.text,
@@ -166,20 +150,19 @@ const styles = StyleSheet.create({
     ratingContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 4,
+        gap: 2,
     },
     rating: {
-        fontSize: 14,
+        fontSize: 12,
         fontWeight: '600',
         color: COLORS.text,
     },
-    stats: {
-        fontSize: 13,
-        color: COLORS.textSecondary,
-        marginBottom: 2,
-    },
-    distance: {
+    rides: {
         fontSize: 12,
+        color: COLORS.textSecondary,
+    },
+    vehicleInfo: {
+        fontSize: 14,
         color: COLORS.textSecondary,
     },
     actions: {
@@ -188,11 +171,9 @@ const styles = StyleSheet.create({
     },
     declineButton: {
         flex: 1,
+        backgroundColor: '#F5F5F5',
         paddingVertical: 14,
-        backgroundColor: COLORS.surface,
         borderRadius: 12,
-        borderWidth: 1.5,
-        borderColor: COLORS.border,
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -202,19 +183,28 @@ const styles = StyleSheet.create({
         color: COLORS.text,
     },
     acceptButton: {
-        flex: 1,
+        flex: 1.5,
+        backgroundColor: '#CCFF00', // Lime green like image
         paddingVertical: 14,
-        backgroundColor: COLORS.primary,
         borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center',
+        flexDirection: 'row',
+        overflow: 'hidden',
+        position: 'relative',
     },
     acceptText: {
         fontSize: 16,
         fontWeight: '600',
-        color: COLORS.white,
+        color: COLORS.black,
+        zIndex: 1,
     },
-    disabledButton: {
-        opacity: 0.6,
+    acceptHighlight: {
+        position: 'absolute',
+        right: 0,
+        top: 0,
+        bottom: 0,
+        width: 20,
+        backgroundColor: '#B2DF00', // Darker lime
     },
 });

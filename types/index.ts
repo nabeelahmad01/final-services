@@ -64,6 +64,7 @@ export interface ServiceRequest {
     status: 'pending' | 'accepted' | 'completed' | 'cancelled';
     createdAt: Date;
     urgency: 'low' | 'medium' | 'high';
+    offeredPrice?: number;
 }
 
 export interface Proposal {

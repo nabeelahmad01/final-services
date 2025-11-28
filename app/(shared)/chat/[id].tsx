@@ -143,7 +143,7 @@ export default function ChatScreen() {
             </View>
             <GiftedChat
                 messages={messages}
-                onSend={(messages) => onSend(messages)}
+                onSend={(messages: any[]) => onSend(messages)}
                 user={{
                     _id: user?.id || '',
                     name: user?.name,

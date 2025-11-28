@@ -1,180 +1,218 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
     View,
     Text,
     StyleSheet,
-    ScrollView,
     TouchableOpacity,
-    RefreshControl,
     Alert,
+    Platform,
+    Dimensions,
+    FlatList,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Avatar } from '@/components/shared/Avatar';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { subscribeToProposals, updateProposalStatus, createBooking, updateServiceRequestStatus, getServiceRequest } from '@/services/firebase/firestore';
 import { COLORS, SIZES } from '@/constants/theme';
-import { Proposal } from '@/types';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Proposal, ServiceRequest } from '@/types';
+import { MapView, Marker, PROVIDER_GOOGLE } from '@/utils/mapHelpers';
+import { ProposalCard } from '@/components/shared/ProposalCard';
+import { Avatar } from '@/components/shared/Avatar';
+
+const { width } = Dimensions.get('window');
 
 export default function Proposals() {
     const router = useRouter();
     const params = useLocalSearchParams();
     const requestId = params.requestId as string;
+    const mapRef = useRef<any>(null);
 
     const [proposals, setProposals] = useState<Proposal[]>([]);
-    const [refreshing, setRefreshing] = useState(false);
+    const [serviceRequest, setServiceRequest] = useState<ServiceRequest | null>(null);
     const [accepting, setAccepting] = useState<string | null>(null);
+    const [offeredPrice, setOfferedPrice] = useState<number>(260); // Default or from request
+    const [driversViewing, setDriversViewing] = useState(2); // Mock for demo
 
     useEffect(() => {
         if (!requestId) return;
+
+        // Fetch request details for location
+        getServiceRequest(requestId).then(req => {
+            if (req) {
+                setServiceRequest(req);
+                if (req.offeredPrice) setOfferedPrice(req.offeredPrice);
+            }
+        });
 
         const unsubscribe = subscribeToProposals(requestId, setProposals);
         return () => unsubscribe();
     }, [requestId]);
 
     const handleAcceptProposal = async (proposal: Proposal) => {
-        Alert.alert(
-            'Accept Proposal',
-            `Accept proposal from ${proposal.mechanicName} for ${proposal.price} PKR?`,
-            [
-                { text: 'Cancel', style: 'cancel' },
+        setAccepting(proposal.id);
+        try {
+            if (!serviceRequest) throw new Error('Service request not found');
+
+            // Update proposal status
+            await updateProposalStatus(proposal.id, 'accepted');
+
+            // Create booking
+            await createBooking({
+                customerId: proposal.customerId,
+                mechanicId: proposal.mechanicId,
+                requestId: proposal.requestId,
+                proposalId: proposal.id,
+                category: serviceRequest.category,
+                customerLocation: serviceRequest.location,
+                price: proposal.price,
+                estimatedTime: proposal.estimatedTime,
+                status: 'ongoing',
+            });
+
+            // Update request status
+            await updateServiceRequestStatus(requestId, 'accepted');
+
+            Alert.alert('Success', 'Proposal accepted! Redirecting to tracking...', [
                 {
-                    text: 'Accept',
-                    onPress: async () => {
-                        setAccepting(proposal.id);
-                        try {
-                            // Get service request details
-                            const serviceRequest = await getServiceRequest(proposal.requestId);
-                            if (!serviceRequest) {
-                                throw new Error('Service request not found');
-                            }
-
-                            // Update proposal status
-                            await updateProposalStatus(proposal.id, 'accepted');
-
-                            // Create booking
-                            await createBooking({
-                                customerId: proposal.customerId,
-                                mechanicId: proposal.mechanicId,
-                                requestId: proposal.requestId,
-                                proposalId: proposal.id,
-                                category: serviceRequest.category,
-                                customerLocation: serviceRequest.location,
-                                price: proposal.price,
-                                estimatedTime: proposal.estimatedTime,
-                                status: 'ongoing',
-                            });
-
-                            // Update request status
-                            await updateServiceRequestStatus(requestId, 'accepted');
-
-                            Alert.alert('Success', 'Proposal accepted! Redirecting to tracking...', [
-                                {
-                                    text: 'OK',
-                                    onPress: () => router.replace('/(customer)/tracking'),
-                                },
-                            ]);
-                        } catch (error: any) {
-                            Alert.alert('Error', error.message);
-                        } finally {
-                            setAccepting(null);
-                        }
-                    },
+                    text: 'OK',
+                    onPress: () => router.replace('/(customer)/tracking'),
                 },
-            ]
+            ]);
+        } catch (error: any) {
+            Alert.alert('Error', error.message);
+        } finally {
+            setAccepting(null);
+        }
+    };
+
+    const handleDeclineProposal = async (proposal: Proposal) => {
+        try {
+            await updateProposalStatus(proposal.id, 'rejected');
+        } catch (error: any) {
+            console.error('Error rejecting proposal:', error);
+        }
+    };
+
+    const adjustFare = (amount: number) => {
+        setOfferedPrice(prev => Math.max(0, prev + amount));
+        // In real app, update Firestore here
+    };
+
+    const renderMap = () => {
+        if (!serviceRequest || !MapView) return null;
+
+        return (
+            <MapView
+                ref={mapRef}
+                provider={PROVIDER_GOOGLE}
+                style={StyleSheet.absoluteFill}
+                initialRegion={{
+                    latitude: serviceRequest.location.latitude,
+                    longitude: serviceRequest.location.longitude,
+                    latitudeDelta: 0.01,
+                    longitudeDelta: 0.01,
+                }}
+            >
+                {Marker && (
+                    <Marker
+                        coordinate={serviceRequest.location}
+                        title="Your Location"
+                        pinColor={COLORS.primary}
+                    />
+                )}
+            </MapView>
         );
     };
 
-    const onRefresh = async () => {
-        setRefreshing(true);
-        setTimeout(() => setRefreshing(false), 1000);
-    };
-
     return (
-        <SafeAreaView style={styles.container}>
-            <ScrollView
-                contentContainerStyle={styles.scrollContent}
-                refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-                }
-            >
+        <View style={styles.container}>
+            {renderMap()}
+
+            <SafeAreaView style={styles.overlay} edges={['top']}>
                 {/* Header */}
                 <View style={styles.header}>
-                    <TouchableOpacity onPress={() => router.push('/(customer)/home')}>
-                        <Ionicons name="arrow-back" size={24} color={COLORS.text} />
+                    <TouchableOpacity
+                        onPress={() => {
+                            Alert.alert('Cancel Request', 'Are you sure you want to cancel?', [
+                                { text: 'No', style: 'cancel' },
+                                { text: 'Yes', style: 'destructive', onPress: () => router.back() }
+                            ]);
+                        }}
+                        style={styles.cancelButton}
+                    >
+                        <Ionicons name="close" size={20} color={COLORS.text} />
+                        <Text style={styles.cancelText}>Cancel request</Text>
                     </TouchableOpacity>
-                    <Text style={styles.headerTitle}>Proposals</Text>
-                    <View style={{ width: 24 }} />
                 </View>
 
-                {proposals.length === 0 ? (
-                    <View style={styles.emptyState}>
-                        <Ionicons name="time-outline" size={64} color={COLORS.textSecondary} />
-                        <Text style={styles.emptyTitle}>Waiting for proposals...</Text>
-                        <Text style={styles.emptySubtitle}>
-                            Mechanics will send proposals soon. You'll be notified!
-                        </Text>
-                    </View>
-                ) : (
-                    <>
-                        <Text style={styles.sectionTitle}>
-                            {proposals.length} Proposal{proposals.length > 1 ? 's' : ''} Received
-                        </Text>
-
-                        {proposals.map((proposal) => (
-                            <Card key={proposal.id} style={styles.proposalCard}>
-                                <View style={styles.mechanicInfo}>
-                                    <Avatar
-                                        name={proposal.mechanicName}
-                                        size={56}
+                {/* Content */}
+                <View style={styles.contentContainer}>
+                    {proposals.length > 0 ? (
+                        <View style={styles.proposalsContainer}>
+                            <Text style={styles.title}>Choose a driver</Text>
+                            <FlatList
+                                data={proposals}
+                                keyExtractor={item => item.id}
+                                renderItem={({ item }) => (
+                                    <ProposalCard
+                                        proposal={item}
+                                        onAccept={handleAcceptProposal}
+                                        onDecline={handleDeclineProposal}
+                                        accepting={accepting === item.id}
                                     />
-                                    <View style={styles.mechanicDetails}>
-                                        <Text style={styles.mechanicName}>
-                                            {proposal.mechanicName}
-                                        </Text>
-                                        <View style={styles.ratingContainer}>
-                                            <Ionicons name="star" size={16} color={COLORS.warning} />
-                                            <Text style={styles.rating}>4.5</Text>
-                                            <Text style={styles.ratingCount}>(23 reviews)</Text>
-                                        </View>
-                                    </View>
+                                )}
+                                showsVerticalScrollIndicator={false}
+                                contentContainerStyle={{ paddingBottom: 20 }}
+                            />
+                        </View>
+                    ) : (
+                        <View style={styles.findingContainer}>
+                            <View style={styles.driversViewing}>
+                                <Text style={styles.viewingText}>
+                                    {driversViewing} drivers are viewing your request
+                                </Text>
+                                <View style={styles.avatars}>
+                                    <Avatar name="D 1" size={24} />
+                                    <Avatar name="D 2" size={24} />
+                                </View>
+                            </View>
+
+                            <View style={styles.negotiationCard}>
+                                <View style={styles.negotiationHeader}>
+                                    <Text style={styles.negotiationTitle}>
+                                        Good fare. Your request gets priority
+                                    </Text>
+                                    <Text style={styles.timer}>0:51</Text>
+                                </View>
+                                <View style={styles.progressBar} />
+
+                                <View style={styles.fareControls}>
+                                    <TouchableOpacity
+                                        style={styles.fareButton}
+                                        onPress={() => adjustFare(-10)}
+                                    >
+                                        <Text style={styles.fareButtonText}>-10</Text>
+                                    </TouchableOpacity>
+
+                                    <Text style={styles.fareAmount}>PKR{offeredPrice}</Text>
+
+                                    <TouchableOpacity
+                                        style={styles.fareButton}
+                                        onPress={() => adjustFare(10)}
+                                    >
+                                        <Text style={styles.fareButtonText}>+10</Text>
+                                    </TouchableOpacity>
                                 </View>
 
-                                <View style={styles.proposalDetails}>
-                                    <View style={styles.detailRow}>
-                                        <Ionicons name="cash-outline" size={20} color={COLORS.primary} />
-                                        <Text style={styles.detailLabel}>Price:</Text>
-                                        <Text style={styles.detailValue}>{proposal.price} PKR</Text>
-                                    </View>
-
-                                    <View style={styles.detailRow}>
-                                        <Ionicons name="time-outline" size={20} color={COLORS.primary} />
-                                        <Text style={styles.detailLabel}>Estimated Time:</Text>
-                                        <Text style={styles.detailValue}>{proposal.estimatedTime}</Text>
-                                    </View>
-
-                                    {proposal.message && (
-                                        <View style={styles.messageContainer}>
-                                            <Text style={styles.messageLabel}>Message:</Text>
-                                            <Text style={styles.messageText}>{proposal.message}</Text>
-                                        </View>
-                                    )}
-                                </View>
-
-                                <Button
-                                    title="Accept Proposal"
-                                    onPress={() => handleAcceptProposal(proposal)}
-                                    loading={accepting === proposal.id}
-                                    disabled={accepting !== null}
-                                />
-                            </Card>
-                        ))}
-                    </>
-                )}
-            </ScrollView>
-        </SafeAreaView>
+                                <TouchableOpacity style={styles.raiseFareButton}>
+                                    <Text style={styles.raiseFareText}>Raise fare</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    )}
+                </View>
+            </SafeAreaView>
+        </View>
     );
 }
 
@@ -183,112 +221,143 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: COLORS.background,
     },
-    scrollContent: {
-        padding: SIZES.padding,
+    overlay: {
+        flex: 1,
+        justifyContent: 'space-between',
     },
     header: {
+        paddingHorizontal: 16,
+        paddingTop: 8,
+    },
+    cancelButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: COLORS.surface,
+        alignSelf: 'flex-start',
+        paddingVertical: 8,
+        paddingHorizontal: 16,
+        borderRadius: 24,
+        gap: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    cancelText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: COLORS.text,
+    },
+    contentContainer: {
+        justifyContent: 'flex-end',
+    },
+    proposalsContainer: {
+        maxHeight: '70%',
+    },
+    title: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: COLORS.text, // Should be visible on map? Maybe add text shadow or background
+        marginLeft: 16,
+        marginBottom: 12,
+        textShadowColor: 'rgba(255, 255, 255, 0.8)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 4,
+    },
+    findingContainer: {
+        padding: 16,
+    },
+    driversViewing: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: 24,
+        backgroundColor: COLORS.surface,
+        padding: 12,
+        borderRadius: 12,
+        marginBottom: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
     },
-    headerTitle: {
-        fontSize: 20,
+    viewingText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: COLORS.text,
+    },
+    avatars: {
+        flexDirection: 'row',
+        gap: -8,
+    },
+    negotiationCard: {
+        backgroundColor: COLORS.surface,
+        borderRadius: 20,
+        padding: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+        elevation: 8,
+    },
+    negotiationHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    negotiationTitle: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: COLORS.text,
+        flex: 1,
+    },
+    timer: {
+        fontSize: 16,
         fontWeight: 'bold',
         color: COLORS.text,
     },
-    sectionTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: COLORS.text,
+    progressBar: {
+        height: 4,
+        backgroundColor: COLORS.text,
+        borderRadius: 2,
+        width: '100%',
+        marginBottom: 20,
+    },
+    fareControls: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
         marginBottom: 16,
     },
-    emptyState: {
+    fareButton: {
+        width: 50,
+        height: 40,
+        backgroundColor: '#F5F5F5',
+        borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 60,
     },
-    emptyTitle: {
-        fontSize: SIZES.lg,
-        fontWeight: 'bold',
-        color: COLORS.text,
-        marginTop: 16,
-    },
-    emptySubtitle: {
-        fontSize: SIZES.base,
+    fareButtonText: {
+        fontSize: 16,
+        fontWeight: '600',
         color: COLORS.textSecondary,
-        textAlign: 'center',
-        marginTop: 8,
-        paddingHorizontal: 40,
     },
-    proposalCard: {
-        marginBottom: 16,
-        padding: 16,
-    },
-    mechanicInfo: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 16,
-        gap: 12,
-    },
-    mechanicDetails: {
-        flex: 1,
-    },
-    mechanicName: {
-        fontSize: SIZES.lg,
+    fareAmount: {
+        fontSize: 28,
         fontWeight: 'bold',
         color: COLORS.text,
     },
-    ratingContainer: {
-        flexDirection: 'row',
+    raiseFareButton: {
+        backgroundColor: '#F5F5F5',
+        paddingVertical: 16,
+        borderRadius: 16,
         alignItems: 'center',
-        marginTop: 4,
-        gap: 4,
     },
-    rating: {
-        fontSize: SIZES.sm,
+    raiseFareText: {
+        fontSize: 16,
         fontWeight: '600',
-        color: COLORS.text,
-    },
-    ratingCount: {
-        fontSize: SIZES.sm,
         color: COLORS.textSecondary,
-    },
-    proposalDetails: {
-        marginBottom: 16,
-        gap: 12,
-    },
-    detailRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-    },
-    detailLabel: {
-        fontSize: SIZES.base,
-        color: COLORS.textSecondary,
-    },
-    detailValue: {
-        fontSize: SIZES.base,
-        fontWeight: '600',
-        color: COLORS.text,
-        flex: 1,
-        textAlign: 'right',
-    },
-    messageContainer: {
-        backgroundColor: COLORS.background,
-        padding: 12,
-        borderRadius: 8,
-        marginTop: 4,
-    },
-    messageLabel: {
-        fontSize: SIZES.sm,
-        fontWeight: '600',
-        color: COLORS.text,
-        marginBottom: 4,
-    },
-    messageText: {
-        fontSize: SIZES.sm,
-        color: COLORS.textSecondary,
-        lineHeight: 20,
     },
 });
