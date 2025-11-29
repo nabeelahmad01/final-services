@@ -20,7 +20,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.fixkar.app",
       "config": {
-        "googleMapsApiKey": "YOUR_GOOGLE_MAPS_API_KEY"
+        "googleMapsApiKey": "42ce295d465c1abd16bf7c4a887f09b6c2ebe48a"
       }
     },
     "android": {

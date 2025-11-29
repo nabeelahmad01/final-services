@@ -234,6 +234,11 @@ export default function ServiceRequest() {
                             key: process.env.EXPO_PUBLIC_GOOGLE_API_KEY || '',
                             language: 'en',
                             components: 'country:pk', // Pakistan only
+                            types: 'geocode', // Get all address types
+                        }}
+                        requestUrl={{
+                            useOnPlatform: 'all',
+                            url: 'https://maps.googleapis.com/maps/api',
                         }}
                         styles={{
                             container: {

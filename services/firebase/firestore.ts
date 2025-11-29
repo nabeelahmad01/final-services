@@ -77,6 +77,26 @@ export const updateServiceRequestStatus = async (
     await updateDoc(doc(firestore, 'serviceRequests', id), { status });
 };
 
+export const subscribeToServiceRequest = (
+    requestId: string,
+    callback: (request: ServiceRequest | null) => void
+) => {
+    return onSnapshot(doc(firestore, 'serviceRequests', requestId), (snapshot) => {
+        if (!snapshot.exists()) {
+            callback(null);
+            return;
+        }
+
+        const data = snapshot.data();
+        callback({
+            id: snapshot.id,
+            ...data,
+            createdAt: data.createdAt.toDate(),
+        } as ServiceRequest);
+    });
+};
+
+
 // Proposals
 export const createProposal = async (proposal: Omit<Proposal, 'id' | 'createdAt'>) => {
     const docRef = await addDoc(collection(firestore, 'proposals'), {

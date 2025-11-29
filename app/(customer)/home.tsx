@@ -20,7 +20,7 @@ import { MapView, Marker, PROVIDER_GOOGLE } from '@/utils/mapHelpers';
 
 const { width } = Dimensions.get('window');
 
-// Custom User Location Marker - LARGE & VISIBLE
+// Custom User Location Marker
 const CustomUserMarker = () => (
     <View style={styles.userMarkerContainer}>
         <View style={styles.userMarkerPulse} />
@@ -33,7 +33,7 @@ const CustomUserMarker = () => (
     </View>
 );
 
-// Custom Mechanic Marker - LARGE & COLOR-CODED
+// Custom Mechanic Marker
 const CustomMechanicMarker = ({ category }: { category?: ServiceCategory }) => {
     const categoryData = CATEGORIES.find(cat => cat.id === category) || CATEGORIES[0];
 
@@ -49,14 +49,12 @@ const CustomMechanicMarker = ({ category }: { category?: ServiceCategory }) => {
 };
 
 import { useTranslation } from 'react-i18next';
-
 import { useThemeColor } from '@/hooks/useThemeColor';
 
 export default function CustomerHome() {
     const { t } = useTranslation();
     const COLORS = useThemeColor();
     const router = useRouter();
-    // ... rest of component ...
     const { user } = useAuthStore();
     const { activeBooking, setActiveBooking } = useBookingStore();
     const { showModal } = useModal();

@@ -12,7 +12,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { subscribeToProposals, updateProposalStatus, createBooking, updateServiceRequestStatus, getServiceRequest } from '@/services/firebase/firestore';
+import { subscribeToProposals, updateProposalStatus, createBooking, updateServiceRequestStatus, getServiceRequest, subscribeToServiceRequest } from '@/services/firebase/firestore';
 import { COLORS, SIZES } from '@/constants/theme';
 import { Proposal, ServiceRequest } from '@/types';
 import { MapView, Marker, PROVIDER_GOOGLE } from '@/utils/mapHelpers';
@@ -36,16 +36,20 @@ export default function Proposals() {
     useEffect(() => {
         if (!requestId) return;
 
-        // Fetch request details for location
-        getServiceRequest(requestId).then(req => {
+        // Subscribe to service request for real-time updates
+        const unsubscribeRequest = subscribeToServiceRequest(requestId, (req) => {
             if (req) {
                 setServiceRequest(req);
                 if (req.offeredPrice) setOfferedPrice(req.offeredPrice);
             }
         });
 
-        const unsubscribe = subscribeToProposals(requestId, setProposals);
-        return () => unsubscribe();
+        const unsubscribeProposals = subscribeToProposals(requestId, setProposals);
+
+        return () => {
+            unsubscribeRequest();
+            unsubscribeProposals();
+        };
     }, [requestId]);
 
     const handleAcceptProposal = async (proposal: Proposal) => {
