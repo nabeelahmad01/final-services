@@ -9,7 +9,7 @@ let Localization: any = null;
 try {
     Localization = require('expo-localization');
 } catch (e) {
-    console.log('expo-localization not available, using fallback');
+    // Silently fallback to default locale
 }
 
 const RESOURCES = {

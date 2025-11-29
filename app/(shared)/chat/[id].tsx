@@ -20,7 +20,7 @@ try {
     Bubble = giftedChatModule.Bubble;
     Send = giftedChatModule.Send;
 } catch (error) {
-    console.log('GiftedChat not available:', error);
+    // GiftedChat not available in Expo Go - fallback UI will be shown
 }
 
 export default function ChatScreen() {

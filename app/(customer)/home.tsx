@@ -106,7 +106,7 @@ export default function CustomerHome() {
             setUserLocation(coords);
             await fetchNearbyMechanics(coords);
         } catch (error) {
-            console.error('Error getting location:', error);
+            // Silently handle location errors
         }
     };
 

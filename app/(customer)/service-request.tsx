@@ -48,14 +48,22 @@ export default function ServiceRequest() {
 
     const getCurrentLocation = async () => {
         try {
-            const { status } = await Location.requestForegroundPermissionsAsync();
-            if (status !== 'granted') {
-                Alert.alert('Permission Denied', 'Location permission is required');
+            // Check if location services are available
+            const hasLocationServices = await Location.hasServicesEnabledAsync();
+            if (!hasLocationServices) {
                 setLoadingLocation(false);
                 return;
             }
 
-            const currentLocation = await Location.getCurrentPositionAsync({});
+            const { status } = await Location.requestForegroundPermissionsAsync();
+            if (status !== 'granted') {
+                setLoadingLocation(false);
+                return;
+            }
+
+            const currentLocation = await Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.Balanced,
+            });
             const newLocation = {
                 latitude: currentLocation.coords.latitude,
                 longitude: currentLocation.coords.longitude,
@@ -71,8 +79,8 @@ export default function ServiceRequest() {
                 const formattedAddress = `${addr.street || ''} ${addr.city || ''}, ${addr.region || ''}, Pakistan`.trim();
                 setAddress(formattedAddress);
             }
-        } catch (error) {
-            console.error('Location error:', error);
+        } catch (error: any) {
+            // Silently handle - use default location (Islamabad)
         } finally {
             setLoadingLocation(false);
         }

@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Service Marketplace",
+    "name": "FixKar",
     "slug": "fixkar",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -20,14 +20,10 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.fixkar.app",
       "config": {
-        "googleMapsApiKey": "42ce295d465c1abd16bf7c4a887f09b6c2ebe48a"
+        "googleMapsApiKey": "AIzaSyBhYMnd2kw3IravpOpUScd3XC0LXUS2hlY"
       }
     },
     "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#00ACC1"
-      },
       "package": "com.fixkar.app",
       "permissions": [
         "ACCESS_FINE_LOCATION",
@@ -42,7 +38,7 @@
       ],
       "config": {
         "googleMaps": {
-          "apiKey": "YOUR_GOOGLE_MAPS_API_KEY"
+          "apiKey": "AIzaSyBhYMnd2kw3IravpOpUScd3XC0LXUS2hlY"
         }
       }
     },
