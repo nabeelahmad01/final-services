@@ -17,11 +17,12 @@ import { subscribeToActiveBooking } from '@/services/firebase/firestore';
 import { createChat } from '@/services/firebase/chatService';
 import { Avatar } from '@/components/shared/Avatar';
 import { Button } from '@/components/ui/Button';
-import { Alert } from 'react-native';
+import { useModal, showErrorModal } from '@/utils/modalService';
 
 export default function ActiveJob() {
     const router = useRouter();
     const { user } = useAuthStore();
+    const { showModal } = useModal();
     const { activeBooking, setActiveBooking } = useBookingStore();
 
     React.useEffect(() => {
@@ -37,7 +38,7 @@ export default function ActiveJob() {
             router.push(`/(shared)/chat/${chatId}`);
         } catch (error) {
             console.error('Error opening chat:', error);
-            Alert.alert('Error', 'Could not open chat');
+            showErrorModal(showModal, 'Error', 'Could not open chat');
         }
     };
 

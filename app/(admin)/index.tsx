@@ -5,7 +5,6 @@ import {
     StyleSheet,
     SafeAreaView,
     TouchableOpacity,
-    Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,6 +12,7 @@ import { COLORS, SIZES } from '@/constants/theme';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { useModal, showSuccessModal, showErrorModal } from '@/utils/modalService';
 
 // Admin password - In production, this should be from environment variables
 const ADMIN_PASSWORD = 'FixKar2024Admin';
@@ -21,10 +21,11 @@ export default function AdminLogin() {
     const router = useRouter();
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
+    const { showModal } = useModal();
 
     const handleLogin = async () => {
         if (!password) {
-            Alert.alert('Error', 'Please enter password');
+            showErrorModal(showModal, 'Error', 'Please enter password');
             return;
         }
 
@@ -32,14 +33,14 @@ export default function AdminLogin() {
 
         // Simple password check
         if (password === ADMIN_PASSWORD) {
-            Alert.alert('Success', 'Welcome Admin!', [
-                {
-                    text: 'OK',
-                    onPress: () => router.replace('/(admin)/dashboard'),
-                },
-            ]);
+            showSuccessModal(
+                showModal,
+                'Success',
+                'Welcome Admin!',
+                () => router.replace('/(admin)/dashboard')
+            );
         } else {
-            Alert.alert('Error', 'Incorrect password');
+            showErrorModal(showModal, 'Error', 'Incorrect password');
         }
 
         setLoading(false);

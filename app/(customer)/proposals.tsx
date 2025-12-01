@@ -4,7 +4,6 @@ import {
     Text,
     StyleSheet,
     TouchableOpacity,
-    Alert,
     Platform,
     Dimensions,
     FlatList,
@@ -18,6 +17,7 @@ import { Proposal, ServiceRequest } from '@/types';
 import { MapView, Marker, PROVIDER_GOOGLE } from '@/utils/mapHelpers';
 import { ProposalCard } from '@/components/shared/ProposalCard';
 import { Avatar } from '@/components/shared/Avatar';
+import { useModal, showSuccessModal, showErrorModal, showConfirmModal } from '@/utils/modalService';
 
 const { width } = Dimensions.get('window');
 
@@ -25,6 +25,7 @@ export default function Proposals() {
     const router = useRouter();
     const params = useLocalSearchParams();
     const requestId = params.requestId as string;
+    const { showModal } = useModal();
     const mapRef = useRef<any>(null);
 
     const [proposals, setProposals] = useState<Proposal[]>([]);
@@ -76,14 +77,14 @@ export default function Proposals() {
             // Update request status
             await updateServiceRequestStatus(requestId, 'accepted');
 
-            Alert.alert('Success', 'Proposal accepted! Redirecting to tracking...', [
-                {
-                    text: 'OK',
-                    onPress: () => router.replace('/(customer)/tracking'),
-                },
-            ]);
+            showSuccessModal(
+                showModal,
+                'Success',
+                'Proposal accepted! Redirecting to tracking...',
+                () => router.replace('/(customer)/tracking')
+            );
         } catch (error: any) {
-            Alert.alert('Error', error.message);
+            showErrorModal(showModal, 'Error', error.message);
         } finally {
             setAccepting(null);
         }
@@ -137,10 +138,15 @@ export default function Proposals() {
                 <View style={styles.header}>
                     <TouchableOpacity
                         onPress={() => {
-                            Alert.alert('Cancel Request', 'Are you sure you want to cancel?', [
-                                { text: 'No', style: 'cancel' },
-                                { text: 'Yes', style: 'destructive', onPress: () => router.back() }
-                            ]);
+                            showConfirmModal(
+                                showModal,
+                                'Cancel Request',
+                                'Are you sure you want to cancel?',
+                                () => router.back(),
+                                undefined,
+                                'Yes',
+                                'No'
+                            );
                         }}
                         style={styles.cancelButton}
                     >

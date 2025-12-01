@@ -5,7 +5,6 @@ import {
     StyleSheet,
     ScrollView,
     TouchableOpacity,
-    Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -18,10 +17,12 @@ import { initiateJazzCashPayment } from '@/services/payments/jazzcashService';
 import { initiateEasypaisaPayment } from '@/services/payments/easypaisaService';
 import { COLORS, SIZES, DIAMOND_PACKAGES } from '@/constants/theme';
 import { Mechanic, Transaction } from '@/types';
+import { useModal, showErrorModal, showSuccessModal, showConfirmModal } from '@/utils/modalService';
 
 export default function WalletScreen() {
     const router = useRouter();
     const { user } = useAuthStore();
+    const { showModal } = useModal();
     const [mechanic, setMechanic] = useState<Mechanic | null>(null);
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [selectedPackage, setSelectedPackage] = useState<any>(null);
@@ -45,41 +46,39 @@ export default function WalletScreen() {
 
     const handlePurchase = (paymentMethod: 'jazzcash' | 'easypaisa') => {
         if (!selectedPackage || !user) {
-            Alert.alert('Error', 'Please select a package');
+            showErrorModal(showModal, 'Error', 'Please select a package');
             return;
         }
 
-        Alert.alert(
+        showConfirmModal(
+            showModal,
             `Purchase with ${paymentMethod === 'jazzcash' ? 'JazzCash' : 'EasyPaisa'}`,
             `You will be charged PKR ${selectedPackage.price} for ${selectedPackage.diamonds} diamonds`,
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Continue',
-                    onPress: async () => {
-                        setLoading(true);
-                        try {
-                            const paymentData = {
-                                amount: selectedPackage.price,
-                                mechanicId: user.id,
-                                diamonds: selectedPackage.diamonds,
-                            };
+            async () => {
+                setLoading(true);
+                try {
+                    const paymentData = {
+                        amount: selectedPackage.price,
+                        mechanicId: user.id,
+                        diamonds: selectedPackage.diamonds,
+                    };
 
-                            if (paymentMethod === 'jazzcash') {
-                                await initiateJazzCashPayment(paymentData);
-                            } else {
-                                await initiateEasypaisaPayment(paymentData);
-                            }
+                    if (paymentMethod === 'jazzcash') {
+                        await initiateJazzCashPayment(paymentData);
+                    } else {
+                        await initiateEasypaisaPayment(paymentData);
+                    }
 
-                            Alert.alert('Success', 'Payment initiated. You will be redirected to the payment gateway.');
-                        } catch (error: any) {
-                            Alert.alert('Error', error.message);
-                        } finally {
-                            setLoading(false);
-                        }
-                    },
-                },
-            ]
+                    showSuccessModal(showModal, 'Success', 'Payment initiated. You will be redirected to the payment gateway.');
+                } catch (error: any) {
+                    showErrorModal(showModal, 'Error', error.message);
+                } finally {
+                    setLoading(false);
+                }
+            },
+            undefined,
+            'Continue',
+            'Cancel'
         );
     };
 

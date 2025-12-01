@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,11 +8,13 @@ import { Rating } from '@/components/ui/Rating';
 import { COLORS, SIZES, FONTS } from '@/constants/theme';
 import { addReview } from '@/services/firebase/reviewService';
 import { useAuthStore } from '@/stores/authStore';
+import { useModal, showWarningModal, showSuccessModal, showErrorModal } from '@/utils/modalService';
 
 export default function LeaveReview() {
     const router = useRouter();
     const params = useLocalSearchParams();
     const { user } = useAuthStore();
+    const { showModal } = useModal();
     const [rating, setRating] = useState(0);
     const [review, setReview] = useState('');
     const [loading, setLoading] = useState(false);
@@ -23,7 +25,7 @@ export default function LeaveReview() {
 
     const handleSubmit = async () => {
         if (rating === 0) {
-            Alert.alert('Rating Required', 'Please select a rating before submitting');
+            showWarningModal(showModal, 'Rating Required', 'Please select a rating before submitting');
             return;
         }
 
@@ -37,19 +39,15 @@ export default function LeaveReview() {
                 review
             );
 
-            Alert.alert(
+            showSuccessModal(
+                showModal,
                 'Review Submitted',
                 'Thank you for your feedback!',
-                [
-                    {
-                        text: 'OK',
-                        onPress: () => router.push('/(customer)/home'),
-                    },
-                ]
+                () => router.push('/(customer)/home')
             );
         } catch (error: any) {
             console.error('Review error:', error);
-            Alert.alert('Error', 'Failed to submit review');
+            showErrorModal(showModal, 'Error', 'Failed to submit review');
         } finally {
             setLoading(false);
         }

@@ -5,7 +5,6 @@ import {
     StyleSheet,
     FlatList,
     TouchableOpacity,
-    Alert,
     Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,6 +15,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useModal, showSuccessModal, showErrorModal, showConfirmModal } from '@/utils/modalService';
 
 
 interface KYCRequest {
@@ -40,6 +40,7 @@ export default function AdminKYCVerification() {
     const [requests, setRequests] = useState<KYCRequest[]>([]);
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState<string | null>(null);
+    const { showModal } = useModal();
 
     useEffect(() => {
         loadKYCRequests();
@@ -61,7 +62,7 @@ export default function AdminKYCVerification() {
 
             setRequests(requestsData);
         } catch (error) {
-            Alert.alert('Error', 'Failed to load KYC requests');
+            showErrorModal(showModal, 'Error', 'Failed to load KYC requests');
         } finally {
             setLoading(false);
         }
@@ -69,84 +70,79 @@ export default function AdminKYCVerification() {
 
     const handleApprove = async (request: KYCRequest) => {
         if (!request.mechanicId) {
-            Alert.alert('Error', 'Invalid mechanic ID');
+            showErrorModal(showModal, 'Error', 'Invalid mechanic ID');
             return;
         }
 
-        Alert.alert(
+        showConfirmModal(
+            showModal,
             'Approve KYC',
             `Approve KYC for ${request.mechanicName}?`,
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Approve',
-                    onPress: async () => {
-                        setProcessing(request.id);
-                        try {
-                            // Update KYC request status
-                            await updateDoc(doc(firestore, 'kycRequests', request.id), {
-                                status: 'approved',
-                                approvedAt: new Date(),
-                            });
+            async () => {
+                setProcessing(request.id);
+                try {
+                    // Update KYC request status
+                    await updateDoc(doc(firestore, 'kycRequests', request.id), {
+                        status: 'approved',
+                        approvedAt: new Date(),
+                    });
 
-                            // Update mechanic verification status
-                            await updateDoc(doc(firestore, 'mechanics', request.mechanicId), {
-                                isVerified: true,
-                                kycStatus: 'approved',
-                            });
+                    // Update mechanic verification status
+                    await updateDoc(doc(firestore, 'mechanics', request.mechanicId), {
+                        isVerified: true,
+                        kycStatus: 'approved',
+                    });
 
-                            Alert.alert('Success', 'KYC approved successfully');
-                            loadKYCRequests();
-                        } catch (error) {
-                            Alert.alert('Error', 'Failed to approve KYC');
-                        } finally {
-                            setProcessing(null);
-                        }
-                    },
-                },
-            ]
+                    showSuccessModal(showModal, 'Success', 'KYC approved successfully');
+                    loadKYCRequests();
+                } catch (error) {
+                    showErrorModal(showModal, 'Error', 'Failed to approve KYC');
+                } finally {
+                    setProcessing(null);
+                }
+            },
+            undefined,
+            'Approve',
+            'Cancel'
         );
     };
 
     const handleReject = async (request: KYCRequest) => {
         if (!request.mechanicId) {
-            Alert.alert('Error', 'Invalid mechanic ID');
+            showErrorModal(showModal, 'Error', 'Invalid mechanic ID');
             return;
         }
 
-        Alert.alert(
+        showConfirmModal(
+            showModal,
             'Reject KYC',
             `Reject KYC for ${request.mechanicName}? They can resubmit.`,
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Reject',
-                    style: 'destructive',
-                    onPress: async () => {
-                        setProcessing(request.id);
-                        try {
-                            // Update KYC request status
-                            await updateDoc(doc(firestore, 'kycRequests', request.id), {
-                                status: 'rejected',
-                                rejectedAt: new Date(),
-                            });
+            async () => {
+                setProcessing(request.id);
+                try {
+                    // Update KYC request status
+                    await updateDoc(doc(firestore, 'kycRequests', request.id), {
+                        status: 'rejected',
+                        rejectedAt: new Date(),
+                    });
 
-                            // Update mechanic verification status
-                            await updateDoc(doc(firestore, 'mechanics', request.mechanicId), {
-                                isVerified: false,
-                                kycStatus: 'rejected',
-                            });
+                    // Update mechanic verification status
+                    await updateDoc(doc(firestore, 'mechanics', request.mechanicId), {
+                        isVerified: false,
+                        kycStatus: 'rejected',
+                    });
 
-                            Alert.alert('Success', 'KYC rejected. User can resubmit.');
-                            loadKYCRequests();
-                        } catch (error) {
-                            Alert.alert('Error', 'Failed to reject KYC');
-                        } finally {
-                            setProcessing(null);
-                        }
-                    },
-                },
-            ]
+                    showSuccessModal(showModal, 'Success', 'KYC rejected. User can resubmit.');
+                    loadKYCRequests();
+                } catch (error) {
+                    showErrorModal(showModal, 'Error', 'Failed to reject KYC');
+                } finally {
+                    setProcessing(null);
+                }
+            },
+            undefined,
+            'Reject',
+            'Cancel'
         );
     };
 

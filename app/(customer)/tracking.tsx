@@ -5,7 +5,6 @@ import {
     StyleSheet,
     TouchableOpacity,
     Dimensions,
-    Alert,
     Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -21,6 +20,7 @@ import { COLORS, SIZES } from '@/constants/theme';
 import { Mechanic } from '@/types';
 import { MapView, Marker, Polyline, PROVIDER_GOOGLE } from '@/utils/mapHelpers';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useModal, showErrorModal, showConfirmModal } from '@/utils/modalService';
 
 const { width, height } = Dimensions.get('window');
 
@@ -28,6 +28,7 @@ export default function TrackingScreen() {
     const router = useRouter();
     const { user } = useAuthStore();
     const { activeBooking } = useBookingStore();
+    const { showModal } = useModal();
 
     const [mechanic, setMechanic] = useState<Mechanic | null>(null);
     const [mechanicLocation, setMechanicLocation] = useState<any>(null);
@@ -81,27 +82,24 @@ export default function TrackingScreen() {
             router.push(`/(shared)/chat/${chatId}`);
         } catch (error) {
             console.error('Error opening chat:', error);
-            Alert.alert('Error', 'Could not open chat');
+            showErrorModal(showModal, 'Error', 'Could not open chat');
         }
     };
 
     const handleCancelRide = () => {
-        Alert.alert(
+        showConfirmModal(
+            showModal,
             'Cancel Service',
             'Are you sure you want to cancel this service?',
-            [
-                { text: 'No', style: 'cancel' },
-                {
-                    text: 'Yes, Cancel',
-                    style: 'destructive',
-                    onPress: async () => {
-                        if (activeBooking) {
-                            await updateBooking(activeBooking.id, { status: 'cancelled' });
-                            router.replace('/(customer)/home');
-                        }
-                    },
-                },
-            ]
+            async () => {
+                if (activeBooking) {
+                    await updateBooking(activeBooking.id, { status: 'cancelled' });
+                    router.replace('/(customer)/home');
+                }
+            },
+            undefined,
+            'Yes, Cancel',
+            'No'
         );
     };
 

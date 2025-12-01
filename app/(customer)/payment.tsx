@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,11 +7,13 @@ import { Button, Card } from '@/components';
 import { COLORS, SIZES, FONTS } from '@/constants/theme';
 import { processPayment } from '@/services/payment/paymentService';
 import { useAuthStore } from '@/stores/authStore';
+import { useModal, showErrorModal, showSuccessModal } from '@/utils/modalService';
 
 export default function Payment() {
     const router = useRouter();
     const params = useLocalSearchParams();
     const { user } = useAuthStore();
+    const { showModal } = useModal();
     const [selectedMethod, setSelectedMethod] = useState<'jazzcash' | 'easypaisa' | null>(null);
     const [phoneNumber, setPhoneNumber] = useState('');
     const [processing, setProcessing] = useState(false);
@@ -20,12 +22,12 @@ export default function Payment() {
 
     const handlePayment = async () => {
         if (!selectedMethod) {
-            Alert.alert('Error', 'Please select a payment method');
+            showErrorModal(showModal, 'Error', 'Please select a payment method');
             return;
         }
 
         if (!phoneNumber) {
-            Alert.alert('Error', 'Please enter your phone number');
+            showErrorModal(showModal, 'Error', 'Please enter your phone number');
             return;
         }
 
@@ -39,21 +41,17 @@ export default function Payment() {
             );
 
             if (result.success) {
-                Alert.alert(
+                showSuccessModal(
+                    showModal,
                     'Payment Successful',
                     'Your payment has been processed successfully',
-                    [
-                        {
-                            text: 'OK',
-                            onPress: () => router.push('/(customer)/home'),
-                        },
-                    ]
+                    () => router.push('/(customer)/home')
                 );
             } else {
-                Alert.alert('Payment Failed', result.error || 'Unknown error');
+                showErrorModal(showModal, 'Payment Failed', result.error || 'Unknown error');
             }
         } catch (error: any) {
-            Alert.alert('Payment Failed', error.message);
+            showErrorModal(showModal, 'Payment Failed', error.message);
         } finally {
             setProcessing(false);
         }

@@ -5,7 +5,6 @@ import {
     StyleSheet,
     ScrollView,
     TouchableOpacity,
-    Alert,
     KeyboardAvoidingView,
     Platform,
     ActivityIndicator,
@@ -24,12 +23,14 @@ import { COLORS, SIZES, CATEGORIES } from '@/constants/theme';
 import { ServiceCategory } from '@/types';
 import { MapView, Marker, PROVIDER_GOOGLE } from '@/utils/mapHelpers';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useModal, showErrorModal } from '@/utils/modalService';
 
 export default function ServiceRequest() {
     const router = useRouter();
     const params = useLocalSearchParams();
     const category = (params.category as ServiceCategory) || 'car_mechanic';
     const { user } = useAuthStore();
+    const { showModal } = useModal();
     const mapRef = useRef<any>(null);
     const googlePlacesRef = useRef<any>(null);
 
@@ -135,12 +136,20 @@ export default function ServiceRequest() {
 
     const handleSubmit = async () => {
         if (!description || !address) {
-            Alert.alert('Error', 'Please fill all fields and select location on map');
+            showErrorModal(
+                showModal,
+                'Error',
+                'Please fill all fields and select location on map'
+            );
             return;
         }
 
         if (!user) {
-            Alert.alert('Error', 'You must be logged in');
+            showErrorModal(
+                showModal,
+                'Error',
+                'You must be logged in'
+            );
             return;
         }
 
@@ -161,21 +170,27 @@ export default function ServiceRequest() {
                 urgency: 'medium',
             });
 
-            Alert.alert(
-                'Success',
-                'Service request created! Mechanics will send proposals soon.',
-                [
+            showModal({
+                title: 'Success',
+                message: 'Service request created! Mechanics will send proposals soon.',
+                type: 'success',
+                buttons: [
                     {
                         text: 'View Proposals',
                         onPress: () => router.replace({
                             pathname: '/(customer)/proposals',
                             params: { requestId }
                         }),
+                        style: 'success',
                     },
-                ]
-            );
+                ],
+            });
         } catch (error: any) {
-            Alert.alert('Error', error.message);
+            showErrorModal(
+                showModal,
+                'Error',
+                error.message
+            );
         } finally {
             setLoading(false);
         }

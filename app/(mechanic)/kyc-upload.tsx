@@ -6,7 +6,6 @@ import {
     ScrollView,
     TouchableOpacity,
     Image,
-    Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -20,10 +19,12 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { uploadImage } from '@/services/firebase/storage';
 import { firestore } from '@/services/firebase/config';
+import { useModal, showSuccessModal, showErrorModal, showWarningModal } from '@/utils/modalService';
 
 export default function KYCUpload() {
     const router = useRouter();
     const { user } = useAuthStore();
+    const { showModal } = useModal();
     const [loading, setLoading] = useState(false);
 
     // Form state
@@ -57,7 +58,7 @@ export default function KYCUpload() {
     const takeSelfie = async () => {
         const permission = await ImagePicker.requestCameraPermissionsAsync();
         if (!permission.granted) {
-            Alert.alert('Permission Needed', 'Camera permission is required for selfie verification');
+            showWarningModal(showModal, 'Permission Needed', 'Camera permission is required for selfie verification');
             return;
         }
 
@@ -75,22 +76,22 @@ export default function KYCUpload() {
     const handleSubmit = async () => {
         // Validation
         if (!fullName || !cnicNumber || !address) {
-            Alert.alert('Error', 'Please fill all required fields');
+            showErrorModal(showModal, 'Error', 'Please fill all required fields');
             return;
         }
 
         if (!cnicFront || !cnicBack || !selfie) {
-            Alert.alert('Error', 'Please upload all required documents');
+            showErrorModal(showModal, 'Error', 'Please upload all required documents');
             return;
         }
 
         if (!termsAccepted) {
-            Alert.alert('Error', 'Please accept terms and conditions');
+            showErrorModal(showModal, 'Error', 'Please accept terms and conditions');
             return;
         }
 
         if (!user?.id) {
-            Alert.alert('Error', 'User not authenticated');
+            showErrorModal(showModal, 'Error', 'User not authenticated');
             return;
         }
 
@@ -130,13 +131,14 @@ export default function KYCUpload() {
                 kycStatus: 'pending',
             });
 
-            Alert.alert(
+            showSuccessModal(
+                showModal,
                 'Success',
                 'Your KYC documents have been submitted for verification. You will be notified once reviewed.',
-                [{ text: 'OK', onPress: () => router.push('/(mechanic)/dashboard') }]
+                () => router.push('/(mechanic)/dashboard')
             );
         } catch (error: any) {
-            Alert.alert('Error', error.message || 'Failed to submit KYC documents');
+            showErrorModal(showModal, 'Error', error.message || 'Failed to submit KYC documents');
         } finally {
             setLoading(false);
         }

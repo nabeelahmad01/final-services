@@ -6,7 +6,6 @@ import {
     ScrollView,
     TouchableOpacity,
     Switch,
-    Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -18,50 +17,46 @@ import { Card } from '@/components/ui/Card';
 
 import { useTranslation } from 'react-i18next';
 import { useThemeStore } from '@/stores/themeStore';
+import { useModal, showConfirmModal, showInfoModal } from '@/utils/modalService';
 
 export default function Settings() {
     const { t, i18n } = useTranslation();
     const { mode, setMode } = useThemeStore();
     const router = useRouter();
     const { setUser } = useAuthStore();
+    const { showModal } = useModal();
     const [pushNotifications, setPushNotifications] = useState(true);
     const [emailNotifications, setEmailNotifications] = useState(false);
     const [smsNotifications, setSmsNotifications] = useState(false);
 
     const handleLogout = () => {
-        Alert.alert(
+        showConfirmModal(
+            showModal,
             'Logout',
             'Are you sure you want to logout?',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Logout',
-                    style: 'destructive',
-                    onPress: async () => {
-                        await signOut();
-                        setUser(null);
-                        router.replace('/(auth)/role-selection');
-                    },
-                },
-            ]
+            async () => {
+                await signOut();
+                setUser(null);
+                router.replace('/(auth)/role-selection');
+            },
+            undefined,
+            'Logout',
+            'Cancel'
         );
     };
 
     const handleDeleteAccount = () => {
-        Alert.alert(
+        showConfirmModal(
+            showModal,
             'Delete Account',
             'Are you sure? This action cannot be undone. All your data will be permanently deleted.',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Delete',
-                    style: 'destructive',
-                    onPress: () => {
-                        // TODO: Implement account deletion
-                        Alert.alert('Coming Soon', 'Account deletion feature will be available soon');
-                    },
-                },
-            ]
+            () => {
+                // TODO: Implement account deletion
+                showInfoModal(showModal, 'Coming Soon', 'Account deletion feature will be available soon');
+            },
+            undefined,
+            'Delete',
+            'Cancel'
         );
     };
 
@@ -126,7 +121,7 @@ export default function Settings() {
                         icon="lock-closed-outline"
                         title="Change Password"
                         subtitle="Update your password"
-                        onPress={() => Alert.alert('Coming Soon', 'Password change feature will be available soon')}
+                        onPress={() => showInfoModal(showModal, 'Coming Soon', 'Password change feature will be available soon')}
                     />
                 </Card>
 
@@ -183,12 +178,12 @@ export default function Settings() {
                     <SettingItem
                         icon="shield-outline"
                         title="Privacy Policy"
-                        onPress={() => Alert.alert('Privacy Policy', 'Privacy policy content will be displayed here')}
+                        onPress={() => showInfoModal(showModal, 'Privacy Policy', 'Privacy policy content will be displayed here')}
                     />
                     <SettingItem
                         icon="document-text-outline"
                         title="Terms of Service"
-                        onPress={() => Alert.alert('Terms of Service', 'Terms of service content will be displayed here')}
+                        onPress={() => showInfoModal(showModal, 'Terms of Service', 'Terms of service content will be displayed here')}
                     />
                 </Card>
 
@@ -200,20 +195,14 @@ export default function Settings() {
                         title={t('settings.language')}
                         subtitle={i18n.language === 'ur' ? 'Urdu' : 'English'}
                         onPress={() => {
-                            Alert.alert(
+                            showConfirmModal(
+                                showModal,
                                 t('settings.language'),
                                 'Select your preferred language',
-                                [
-                                    {
-                                        text: 'English',
-                                        onPress: () => i18n.changeLanguage('en'),
-                                    },
-                                    {
-                                        text: 'Urdu',
-                                        onPress: () => i18n.changeLanguage('ur'),
-                                    },
-                                    { text: t('common.cancel'), style: 'cancel' },
-                                ]
+                                () => i18n.changeLanguage('en'),
+                                () => i18n.changeLanguage('ur'),
+                                'English',
+                                'Urdu'
                             );
                         }}
                     />
@@ -231,7 +220,7 @@ export default function Settings() {
                     <SettingItem
                         icon="help-circle-outline"
                         title="Help & Support"
-                        onPress={() => Alert.alert('Help & Support', 'Support information will be available soon')}
+                        onPress={() => showInfoModal(showModal, 'Help & Support', 'Support information will be available soon')}
                     />
                 </Card>
 

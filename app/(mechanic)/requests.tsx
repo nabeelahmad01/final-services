@@ -6,7 +6,6 @@ import {
     ScrollView,
     TouchableOpacity,
     RefreshControl,
-    Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,10 +16,12 @@ import { subscribeToServiceRequests, createProposal, updateMechanicDiamonds, get
 import { COLORS, SIZES, CATEGORIES } from '@/constants/theme';
 import { ServiceRequest } from '@/types';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useModal, showSuccessModal, showErrorModal, showConfirmModal } from '@/utils/modalService';
 
 export default function MechanicRequests() {
     const router = useRouter();
     const { user } = useAuthStore();
+    const { showModal } = useModal();
     const [requests, setRequests] = useState<ServiceRequest[]>([]);
     const [refreshing, setRefreshing] = useState(false);
     const [submitting, setSubmitting] = useState<string | null>(null);
@@ -37,48 +38,46 @@ export default function MechanicRequests() {
     const handleSubmitProposal = async (request: ServiceRequest) => {
         if (!user) return;
 
-        Alert.alert(
+        showConfirmModal(
+            showModal,
             'Submit Proposal',
-            'Cost: 1 Diamond\\n\\nEnter your proposal details:',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Submit',
-                    onPress: async () => {
-                        setSubmitting(request.id);
-                        try {
-                            // Deduct diamond
-                            await updateMechanicDiamonds(user.id, 1, 'subtract');
+            'Cost: 1 Diamond\n\nEnter your proposal details:',
+            async () => {
+                setSubmitting(request.id);
+                try {
+                    // Deduct diamond
+                    await updateMechanicDiamonds(user.id, 1, 'subtract');
 
-                            // Get mechanic details
-                            const mechanicData = await getMechanic(user.id);
-                            if (!mechanicData) throw new Error('Mechanic data not found');
+                    // Get mechanic details
+                    const mechanicData = await getMechanic(user.id);
+                    if (!mechanicData) throw new Error('Mechanic data not found');
 
-                            // Create proposal
-                            await createProposal({
-                                requestId: request.id,
-                                customerId: request.customerId,
-                                mechanicId: user.id,
-                                mechanicName: user.name,
-                                mechanicPhoto: user.profilePic,
-                                mechanicRating: mechanicData.rating,
-                                mechanicTotalRatings: mechanicData.totalRatings,
-                                price: 2000, // TODO: Let mechanic input
-                                estimatedTime: '1-2 hours', // TODO: Let mechanic input
-                                message: 'I can help you with this!',
-                                distance: 2.5, // TODO: Calculate actual distance
-                                status: 'pending',
-                            });
+                    // Create proposal
+                    await createProposal({
+                        requestId: request.id,
+                        customerId: request.customerId,
+                        mechanicId: user.id,
+                        mechanicName: user.name,
+                        mechanicPhoto: user.profilePic,
+                        mechanicRating: mechanicData.rating,
+                        mechanicTotalRatings: mechanicData.totalRatings,
+                        price: 2000, // TODO: Let mechanic input
+                        estimatedTime: '1-2 hours', // TODO: Let mechanic input
+                        message: 'I can help you with this!',
+                        distance: 2.5, // TODO: Calculate actual distance
+                        status: 'pending',
+                    });
 
-                            Alert.alert('Success', 'Proposal submitted!');
-                        } catch (error: any) {
-                            Alert.alert('Error', error.message);
-                        } finally {
-                            setSubmitting(null);
-                        }
-                    },
-                },
-            ]
+                    showSuccessModal(showModal, 'Success', 'Proposal submitted!');
+                } catch (error: any) {
+                    showErrorModal(showModal, 'Error', error.message);
+                } finally {
+                    setSubmitting(null);
+                }
+            },
+            undefined,
+            'Submit',
+            'Cancel'
         );
     };
 
