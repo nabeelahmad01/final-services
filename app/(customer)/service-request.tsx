@@ -10,6 +10,7 @@ import {
     Platform,
     ActivityIndicator,
     TextInput,
+    Keyboard,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,6 +31,7 @@ export default function ServiceRequest() {
     const category = (params.category as ServiceCategory) || 'car_mechanic';
     const { user } = useAuthStore();
     const mapRef = useRef<any>(null);
+    const googlePlacesRef = useRef<any>(null);
 
     const [description, setDescription] = useState('');
     const [location, setLocation] = useState({
@@ -39,6 +41,7 @@ export default function ServiceRequest() {
     const [address, setAddress] = useState('');
     const [loading, setLoading] = useState(false);
     const [loadingLocation, setLoadingLocation] = useState(true);
+    const [listViewDisplayed, setListViewDisplayed] = useState<'auto' | boolean>('auto');
 
     const categoryInfo = CATEGORIES.find(c => c.id === category);
 
@@ -106,6 +109,11 @@ export default function ServiceRequest() {
             setLocation(newLocation);
             setAddress(details.formatted_address || data.description);
             animateToLocation(newLocation);
+
+            // Fix: Dismiss keyboard and update text to close dropdown
+            Keyboard.dismiss();
+            setListViewDisplayed(false);
+            googlePlacesRef.current?.setAddressText(data.description);
         }
     };
 
@@ -235,8 +243,13 @@ export default function ServiceRequest() {
                 {/* Search overlay on map */}
                 <View style={styles.searchOverlay}>
                     <GooglePlacesAutocomplete
+                        ref={googlePlacesRef}
                         placeholder="Search location..."
                         fetchDetails={true}
+                        listViewDisplayed={listViewDisplayed}
+                        textInputProps={{
+                            onChangeText: () => setListViewDisplayed('auto'),
+                        }}
                         onPress={handlePlaceSelect}
                         query={{
                             key: process.env.EXPO_PUBLIC_GOOGLE_API_KEY || '',

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, RefreshControl, TouchableOpacity, StyleSheet, Platform, Dimensions } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Platform, Dimensions, StatusBar } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
@@ -11,14 +11,15 @@ import { useNotifications } from '@/stores/useNotifications';
 import { subscribeToActiveBooking, getNearbyMechanics } from '@/services/firebase/firestore';
 import { useModal, showInfoModal } from '@/utils/modalService';
 import { COLORS, SIZES, CATEGORIES } from '@/constants/theme';
-import { CUSTOM_MAP_STYLE_LIGHT } from '@/constants/mapStyles';
 import { ServiceCategory, Mechanic } from '@/types';
 import { Card } from '@/components/ui/Card';
 import { Avatar } from '@/components/shared/Avatar';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { MapView, Marker, PROVIDER_GOOGLE } from '@/utils/mapHelpers';
+import { useTranslation } from 'react-i18next';
+import { useThemeColor } from '@/hooks/useThemeColor';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 // Custom User Location Marker
 const CustomUserMarker = () => (
@@ -48,19 +49,21 @@ const CustomMechanicMarker = ({ category }: { category?: ServiceCategory }) => {
     );
 };
 
-import { useTranslation } from 'react-i18next';
-import { useThemeColor } from '@/hooks/useThemeColor';
-
 export default function CustomerHome() {
     const { t } = useTranslation();
     const COLORS = useThemeColor();
     const router = useRouter();
+    const insets = useSafeAreaInsets();
     const { user } = useAuthStore();
     const { activeBooking, setActiveBooking } = useBookingStore();
     const { showModal } = useModal();
-    const [refreshing, setRefreshing] = useState(false);
-    const [loading, setLoading] = useState(true);
-    const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+
+    // Default location (Islamabad) to show map immediately
+    const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number }>({
+        latitude: 33.6844,
+        longitude: 73.0479,
+    });
+    const [locationLoaded, setLocationLoaded] = useState(false);
     const [nearbyMechanics, setNearbyMechanics] = useState<Mechanic[]>([]);
     const [selectedCategory, setSelectedCategory] = useState<ServiceCategory | null>(null);
     const [loadingMechanics, setLoadingMechanics] = useState(false);
@@ -76,7 +79,6 @@ export default function CustomerHome() {
         });
 
         initializeLocation();
-        setLoading(false);
 
         return () => unsubscribe();
     }, [user]);
@@ -86,14 +88,25 @@ export default function CustomerHome() {
             const { status } = await Location.requestForegroundPermissionsAsync();
 
             if (status !== 'granted') {
-                showInfoModal(
-                    showModal,
-                    'Location Permission',
-                    'Please enable location permissions to see nearby mechanics'
-                );
                 return;
             }
 
+            // Try to get last known position first for immediate feedback
+            const lastKnown = await Location.getLastKnownPositionAsync();
+            if (lastKnown) {
+                setUserLocation({
+                    latitude: lastKnown.coords.latitude,
+                    longitude: lastKnown.coords.longitude,
+                });
+                setLocationLoaded(true);
+                // Fetch mechanics for last known location immediately
+                fetchNearbyMechanics({
+                    latitude: lastKnown.coords.latitude,
+                    longitude: lastKnown.coords.longitude,
+                });
+            }
+
+            // Then get fresh high-accuracy location
             const location = await Location.getCurrentPositionAsync({
                 accuracy: Location.Accuracy.Balanced,
             });
@@ -104,6 +117,7 @@ export default function CustomerHome() {
             };
 
             setUserLocation(coords);
+            setLocationLoaded(true);
             await fetchNearbyMechanics(coords);
         } catch (error) {
             // Silently handle location errors
@@ -122,34 +136,22 @@ export default function CustomerHome() {
         }
     };
 
-    const onRefresh = async () => {
-        setRefreshing(true);
-        if (userLocation) {
-            await fetchNearbyMechanics(userLocation, selectedCategory || undefined);
+    const handleCategoryPress = (category: ServiceCategory) => {
+        if (selectedCategory === category) {
+            setSelectedCategory(null);
+            if (userLocation) fetchNearbyMechanics(userLocation);
+        } else {
+            setSelectedCategory(category);
+            if (userLocation) fetchNearbyMechanics(userLocation, category);
         }
-        setRefreshing(false);
     };
 
-    const handleCategoryPress = (category: ServiceCategory) => {
+    const handleServiceRequest = (category: ServiceCategory) => {
         router.push({
             pathname: '/(customer)/service-request',
             params: { category },
         });
-    };
-
-    const handleCategoryFilter = async (category: ServiceCategory) => {
-        if (selectedCategory === category) {
-            setSelectedCategory(null);
-            if (userLocation) {
-                await fetchNearbyMechanics(userLocation);
-            }
-        } else {
-            setSelectedCategory(category);
-            if (userLocation) {
-                await fetchNearbyMechanics(userLocation, category);
-            }
-        }
-    };
+    }
 
     const getCategoryForMechanic = (mechanic: Mechanic): ServiceCategory | undefined => {
         return mechanic.categories && mechanic.categories.length > 0 ? mechanic.categories[0] : undefined;
@@ -161,18 +163,14 @@ export default function CustomerHome() {
                 <View style={styles.mapPlaceholder}>
                     <Ionicons name="map" size={48} color={COLORS.primary} />
                     <Text style={styles.mapPlaceholderText}>Map view available on mobile app</Text>
-                    <Text style={styles.mapPlaceholderSubtext}>
-                        {nearbyMechanics.length} mechanics nearby
-                    </Text>
                 </View>
             );
         }
 
-        if (!userLocation || !MapView) {
+        if (!MapView) {
             return (
-                <View style={styles.mapPlaceholder}>
+                <View style={styles.mapLoadingContainer}>
                     <LoadingSpinner />
-                    <Text style={styles.mapPlaceholderText}>Loading map...</Text>
                 </View>
             );
         }
@@ -181,19 +179,18 @@ export default function CustomerHome() {
             <MapView
                 provider={PROVIDER_GOOGLE}
                 style={styles.map}
-                customMapStyle={CUSTOM_MAP_STYLE_LIGHT}
-                initialRegion={{
+                region={{
                     latitude: userLocation.latitude,
                     longitude: userLocation.longitude,
-                    latitudeDelta: 0.05,
-                    longitudeDelta: 0.05,
+                    latitudeDelta: 0.015,
+                    longitudeDelta: 0.015,
                 }}
-                showsUserLocation={false}
+                showsUserLocation={false} // Hide system blue dot
                 showsMyLocationButton={false}
-                showsCompass={true}
+                showsCompass={false}
                 toolbarEnabled={false}
             >
-                {Marker && (
+                {Marker && locationLoaded && (
                     <Marker
                         coordinate={userLocation}
                         title="Your Location"
@@ -223,213 +220,102 @@ export default function CustomerHome() {
         );
     };
 
-    if (loading) {
-        return (
-            <View style={styles.container}>
-                <LoadingSpinner fullScreen />
-            </View>
-        );
-    }
-
     return (
-        <SafeAreaView style={styles.container}>
-            <ScrollView
-                contentContainerStyle={styles.scrollContent}
-                refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-                }
-                showsVerticalScrollIndicator={false}
-            >
-                {/* Header */}
-                <View style={styles.header}>
-                    <View>
-                        <Text style={styles.greeting}>{t('home.greeting')},</Text>
-                        <Text style={styles.userName}>{user?.name}</Text>
-                    </View>
-                    <View style={styles.headerIcons}>
-                        <TouchableOpacity
-                            onPress={() => router.push('/(shared)/notifications')}
-                            style={styles.iconButton}
-                        >
-                            {useNotifications.getState().unreadCount > 0 && (
-                                <View style={styles.badge}>
-                                    <Text style={styles.badgeText}>
-                                        {useNotifications.getState().unreadCount}
-                                    </Text>
-                                </View>
-                            )}
-                            <Ionicons name="notifications-outline" size={26} color={COLORS.text} />
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={() => router.push('/(shared)/profile')}>
-                            <Avatar name={user?.name || ''} uri={user?.profilePic} size={48} />
-                        </TouchableOpacity>
-                    </View>
-                </View>
+        <View style={styles.container}>
+            <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
 
-                {/* Active Booking Banner */}
-                {activeBooking && (
-                    <Card style={styles.activeBookingCard}>
-                        <View style={styles.activeBookingContent}>
-                            <Ionicons name="time-outline" size={24} color={COLORS.primary} />
-                            <View style={styles.activeBookingText}>
-                                <Text style={styles.activeBookingTitle}>{t('home.activeService')}</Text>
-                                <Text style={styles.activeBookingSubtitle}>
-                                    {t('home.mechanicOnWay')}
-                                </Text>
-                            </View>
-                            <TouchableOpacity
-                                style={styles.trackButton}
-                                onPress={() => router.push('/(customer)/tracking')}
-                            >
-                                <Text style={styles.trackButtonText}>{t('home.track')}</Text>
-                                <Ionicons name="arrow-forward" size={16} color={COLORS.white} />
-                            </TouchableOpacity>
-                        </View>
-                    </Card>
-                )}
+            {/* Full Screen Map */}
+            <View style={styles.mapContainer}>
+                {renderMap()}
+            </View>
 
-                {/* Map Section */}
-                <View style={styles.section}>
-                    <View style={styles.sectionHeader}>
-                        <View>
-                            <Text style={styles.sectionTitle}>{t('home.nearbyMechanics')}</Text>
-                            <Text style={styles.sectionSubtitle}>
-                                {nearbyMechanics.length} {t('home.verifiedMechanics')}
-                            </Text>
-                        </View>
+            {/* Standard Header (Reverted) */}
+            <View style={[styles.header, { paddingTop: insets.top }]}>
+                <View style={styles.headerContent}>
+                    <TouchableOpacity
+                        style={styles.menuButton}
+                        onPress={() => router.push('/(shared)/profile')}
+                    >
+                        <Ionicons name="menu" size={28} color={COLORS.text} />
+                        {useNotifications.getState().unreadCount > 0 && (
+                            <View style={styles.badge} />
+                        )}
+                    </TouchableOpacity>
+
+                    <View style={styles.headerTitleContainer}>
+                        <Text style={styles.headerTitle}>FixKar</Text>
                         {userLocation && (
-                            <TouchableOpacity onPress={initializeLocation} style={styles.refreshButton}>
-                                <Ionicons name="refresh-outline" size={22} color={COLORS.primary} />
-                            </TouchableOpacity>
+                            <View style={styles.locationBadge}>
+                                <Ionicons name="location" size={12} color={COLORS.primary} />
+                                <Text style={styles.locationText}>Current Location</Text>
+                            </View>
                         )}
                     </View>
 
-                    <Card style={styles.mapCard}>
-                        {renderMap()}
-                    </Card>
-
-                    {/* Category Filter */}
-                    {nearbyMechanics.length > 0 && (
-                        <View style={styles.categoryFilter}>
-                            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                                {CATEGORIES.map((category) => (
-                                    <TouchableOpacity
-                                        key={category.id}
-                                        style={[
-                                            styles.filterChip,
-                                            selectedCategory === category.id && styles.filterChipActive,
-                                        ]}
-                                        onPress={() => handleCategoryFilter(category.id as ServiceCategory)}
-                                    >
-                                        <Ionicons
-                                            name={category.icon as any}
-                                            size={16}
-                                            color={selectedCategory === category.id ? COLORS.white : category.color}
-                                        />
-                                        <Text
-                                            style={[
-                                                styles.filterChipText,
-                                                selectedCategory === category.id && styles.filterChipTextActive,
-                                            ]}
-                                        >
-                                            {category.name}
-                                        </Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </ScrollView>
-                        </View>
-                    )}
-
-                    {/* Mechanics List */}
-                    {loadingMechanics ? (
-                        <LoadingSpinner />
-                    ) : nearbyMechanics.length > 0 ? (
-                        <View style={styles.mechanicsList}>
-                            {nearbyMechanics.slice(0, 3).map((mechanic) => (
-                                <Card key={mechanic.id} style={styles.mechanicCard}>
-                                    <Avatar name={mechanic.name} uri={mechanic.profilePic} size={48} />
-                                    <View style={styles.mechanicInfo}>
-                                        <Text style={styles.mechanicName}>{mechanic.name}</Text>
-                                        <View style={styles.mechanicDetails}>
-                                            <View style={styles.ratingContainer}>
-                                                <Ionicons name="star" size={14} color={COLORS.warning} />
-                                                <Text style={styles.mechanicRating}>
-                                                    {mechanic.rating.toFixed(1)}
-                                                </Text>
-                                            </View>
-                                            <Text style={styles.mechanicDistance}>
-                                                • {(mechanic as any).distance?.toFixed(1)}km
-                                            </Text>
-                                        </View>
-                                    </View>
-                                    <TouchableOpacity style={styles.callButton}>
-                                        <Ionicons name="call" size={20} color={COLORS.primary} />
-                                    </TouchableOpacity>
-                                </Card>
-                            ))}
-                        </View>
-                    ) : userLocation ? (
-                        <View style={styles.emptyState}>
-                            <Ionicons name="search-outline" size={48} color={COLORS.textSecondary} />
-                            <Text style={styles.emptyStateText}>{t('home.noMechanicsFound')}</Text>
-                            <Text style={styles.emptyStateSubtext}>{t('home.adjustFilters')}</Text>
-                        </View>
-                    ) : null}
+                    <View style={{ width: 40 }} />
                 </View>
+            </View>
 
-                {/* Services Section */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>{t('home.whatDoYouNeed')}</Text>
-                    <Text style={styles.sectionSubtitle}>
-                        {t('home.selectService')}
-                    </Text>
+            {/* Location Refresh Button */}
+            <TouchableOpacity
+                onPress={initializeLocation}
+                style={[styles.refreshButton, { bottom: 220 }]}
+            >
+                <Ionicons name="locate" size={24} color={COLORS.primary} />
+            </TouchableOpacity>
 
-                    <View style={styles.categoriesGrid}>
+            {/* Bottom Sheet Container */}
+            <View style={styles.bottomSheet}>
+                {/* Active Booking Banner (if any) */}
+                {activeBooking && (
+                    <TouchableOpacity
+                        style={styles.activeBookingBanner}
+                        onPress={() => router.push('/(customer)/tracking')}
+                    >
+                        <View style={styles.activeBookingContent}>
+                            <View style={styles.pulsatingDot} />
+                            <Text style={styles.activeBookingText}>{t('home.mechanicOnWay')}</Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={20} color={COLORS.white} />
+                    </TouchableOpacity>
+                )}
+
+                {/* Services List */}
+                <View style={styles.servicesContainer}>
+                    <Text style={styles.servicesTitle}>{t('home.selectService')}</Text>
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.servicesScroll}
+                    >
                         {CATEGORIES.map((category) => (
                             <TouchableOpacity
                                 key={category.id}
-                                style={styles.categoryCard}
-                                onPress={() => handleCategoryPress(category.id as ServiceCategory)}
-                                activeOpacity={0.7}
+                                style={[
+                                    styles.serviceCard,
+                                    selectedCategory === category.id && styles.serviceCardActive
+                                ]}
+                                onPress={() => handleServiceRequest(category.id as ServiceCategory)}
                             >
-                                <View
-                                    style={[
-                                        styles.categoryIcon,
-                                        { backgroundColor: category.color + '20' },
-                                    ]}
-                                >
+                                <View style={[
+                                    styles.serviceIconContainer,
+                                    { backgroundColor: category.color + '15' }
+                                ]}>
                                     <Ionicons
                                         name={category.icon as any}
-                                        size={32}
+                                        size={28}
                                         color={category.color}
                                     />
                                 </View>
-                                <Text style={styles.categoryName}>{category.name}</Text>
+                                <Text style={styles.serviceName} numberOfLines={1}>
+                                    {category.name}
+                                </Text>
                             </TouchableOpacity>
                         ))}
-                    </View>
+                    </ScrollView>
                 </View>
-
-                {/* Quick Actions */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>{t('home.quickActions')}</Text>
-
-                    <TouchableOpacity
-                        style={styles.actionCard}
-                        onPress={() => router.push('/(customer)/history')}
-                    >
-                        <View style={styles.actionIcon}>
-                            <Ionicons name="time-outline" size={24} color={COLORS.primary} />
-                        </View>
-                        <View style={styles.actionContent}>
-                            <Text style={styles.actionTitle}>{t('home.serviceHistory')}</Text>
-                            <Text style={styles.actionSubtitle}>{t('home.viewPastServices')}</Text>
-                        </View>
-                        <Ionicons name="chevron-forward" size={24} color={COLORS.textSecondary} />
-                    </TouchableOpacity>
-                </View>
-            </ScrollView>
-        </SafeAreaView>
+            </View>
+        </View>
     );
 }
 
@@ -438,118 +324,8 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: COLORS.background,
     },
-    scrollContent: {
-        padding: SIZES.padding,
-    },
-    header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 24,
-    },
-    greeting: {
-        fontSize: SIZES.base,
-        color: COLORS.textSecondary,
-    },
-    userName: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: COLORS.text,
-        marginTop: 4,
-    },
-    headerIcons: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 16,
-    },
-    iconButton: {
-        position: 'relative',
-        padding: 4,
-    },
-    badge: {
-        position: 'absolute',
-        top: 0,
-        right: 0,
-        backgroundColor: COLORS.danger,
-        borderRadius: 10,
-        minWidth: 20,
-        height: 20,
-        justifyContent: 'center',
-        alignItems: 'center',
-        zIndex: 1,
-    },
-    badgeText: {
-        color: COLORS.white,
-        fontSize: 10,
-        fontWeight: 'bold',
-    },
-    activeBookingCard: {
-        backgroundColor: COLORS.primary + '10',
-        marginBottom: 24,
-    },
-    activeBookingContent: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-    },
-    activeBookingText: {
-        flex: 1,
-    },
-    activeBookingTitle: {
-        fontSize: SIZES.base,
-        fontWeight: '600',
-        color: COLORS.text,
-    },
-    activeBookingSubtitle: {
-        fontSize: SIZES.sm,
-        color: COLORS.textSecondary,
-        marginTop: 2,
-    },
-    trackButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        backgroundColor: COLORS.primary,
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 20,
-    },
-    trackButtonText: {
-        color: COLORS.white,
-        fontWeight: '600',
-        fontSize: SIZES.sm,
-    },
-    section: {
-        marginBottom: 24,
-    },
-    sectionHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 12,
-    },
-    sectionTitle: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        color: COLORS.text,
-        marginBottom: 4,
-    },
-    sectionSubtitle: {
-        fontSize: SIZES.sm,
-        color: COLORS.textSecondary,
-    },
-    refreshButton: {
-        padding: 8,
-        backgroundColor: COLORS.primary + '15',
-        borderRadius: 20,
-    },
-    mapCard: {
-        overflow: 'hidden',
-        padding: 0,
-        height: 300,
-        marginBottom: 12,
-        borderWidth: 2,
-        borderColor: COLORS.primary + '30',
+    mapContainer: {
+        ...StyleSheet.absoluteFillObject,
     },
     map: {
         width: '100%',
@@ -559,20 +335,169 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: COLORS.background,
-        gap: 8,
+        backgroundColor: '#f0f0f0',
     },
     mapPlaceholderText: {
-        fontSize: SIZES.base,
-        color: COLORS.text,
-        fontWeight: '500',
-        marginTop: 12,
-    },
-    mapPlaceholderSubtext: {
-        fontSize: SIZES.sm,
+        marginTop: 10,
         color: COLORS.textSecondary,
     },
-    // LARGE User Marker Styles
+    mapLoadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255,255,255,0.8)',
+    },
+    header: {
+        backgroundColor: COLORS.surface,
+        borderBottomLeftRadius: 24,
+        borderBottomRightRadius: 24,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 5,
+        zIndex: 10,
+    },
+    headerContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 20,
+        paddingBottom: 16,
+        paddingTop: 10,
+    },
+    headerTitleContainer: {
+        alignItems: 'center',
+    },
+    headerTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: COLORS.primary,
+    },
+    locationBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: COLORS.primary + '10',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+        marginTop: 4,
+    },
+    locationText: {
+        fontSize: 10,
+        color: COLORS.primary,
+        fontWeight: '600',
+    },
+    menuButton: {
+        width: 40,
+        height: 40,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    badge: {
+        position: 'absolute',
+        top: 8,
+        right: 8,
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: COLORS.danger,
+    },
+    refreshButton: {
+        position: 'absolute',
+        right: 20,
+        width: 45,
+        height: 45,
+        borderRadius: 25,
+        backgroundColor: COLORS.surface,
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+        elevation: 5,
+        zIndex: 10,
+    },
+    bottomSheet: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: COLORS.surface,
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        paddingTop: 20,
+        paddingBottom: 30, // Extra padding for safe area
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 20,
+    },
+    activeBookingBanner: {
+        marginHorizontal: 20,
+        marginBottom: 20,
+        backgroundColor: COLORS.primary,
+        borderRadius: 12,
+        padding: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    activeBookingContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
+    pulsatingDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: COLORS.white,
+    },
+    activeBookingText: {
+        color: COLORS.white,
+        fontWeight: '600',
+        fontSize: SIZES.sm,
+    },
+    servicesContainer: {
+        marginBottom: 10,
+    },
+    servicesTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: COLORS.text,
+        marginLeft: 20,
+        marginBottom: 12,
+    },
+    servicesScroll: {
+        paddingHorizontal: 20,
+        gap: 12,
+    },
+    serviceCard: {
+        width: 100,
+        alignItems: 'center',
+        gap: 8,
+    },
+    serviceCardActive: {
+        opacity: 0.7,
+    },
+    serviceIconContainer: {
+        width: 64,
+        height: 64,
+        borderRadius: 20,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    serviceName: {
+        fontSize: SIZES.xs,
+        fontWeight: '500',
+        color: COLORS.text,
+        textAlign: 'center',
+    },
+    // Markers
     userMarkerContainer: {
         alignItems: 'center',
         justifyContent: 'center',
@@ -601,7 +526,6 @@ const styles = StyleSheet.create({
         shadowRadius: 8,
         elevation: 12,
     },
-    // LARGE Mechanic Marker Styles
     mechanicMarkerContainer: {
         alignItems: 'center',
         height: 65,
@@ -649,146 +573,5 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.3,
         shadowRadius: 3,
         elevation: 5,
-    },
-    categoryFilter: {
-        marginBottom: 12,
-    },
-    filterChip: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        backgroundColor: COLORS.surface,
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        borderRadius: 20,
-        marginRight: 8,
-        borderWidth: 1,
-        borderColor: COLORS.border,
-    },
-    filterChipActive: {
-        backgroundColor: COLORS.primary,
-        borderColor: COLORS.primary,
-    },
-    filterChipText: {
-        fontSize: SIZES.sm,
-        color: COLORS.text,
-        fontWeight: '500',
-    },
-    filterChipTextActive: {
-        color: COLORS.white,
-    },
-    mechanicsList: {
-        gap: 12,
-    },
-    mechanicCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-    },
-    mechanicInfo: {
-        flex: 1,
-    },
-    mechanicName: {
-        fontSize: SIZES.base,
-        fontWeight: '600',
-        color: COLORS.text,
-        marginBottom: 4,
-    },
-    mechanicDetails: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-    },
-    ratingContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-    },
-    mechanicRating: {
-        fontSize: SIZES.sm,
-        color: COLORS.text,
-        fontWeight: '500',
-    },
-    mechanicDistance: {
-        fontSize: SIZES.sm,
-        color: COLORS.textSecondary,
-    },
-    callButton: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: COLORS.primary + '20',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    emptyState: {
-        alignItems: 'center',
-        paddingVertical: 32,
-        gap: 8,
-    },
-    emptyStateText: {
-        fontSize: SIZES.base,
-        fontWeight: '500',
-        color: COLORS.text,
-    },
-    emptyStateSubtext: {
-        fontSize: SIZES.sm,
-        color: COLORS.textSecondary,
-    },
-    categoriesGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 12,
-        marginTop: 12,
-    },
-    categoryCard: {
-        width: '31%',
-        backgroundColor: COLORS.surface,
-        borderRadius: 12,
-        padding: 16,
-        alignItems: 'center',
-    },
-    categoryIcon: {
-        width: 60,
-        height: 60,
-        borderRadius: 30,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 8,
-    },
-    categoryName: {
-        fontSize: SIZES.xs,
-        fontWeight: '600',
-        color: COLORS.text,
-        textAlign: 'center',
-    },
-    actionCard: {
-        backgroundColor: COLORS.surface,
-        borderRadius: 12,
-        padding: 16,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-    },
-    actionIcon: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        backgroundColor: COLORS.primary + '20',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    actionContent: {
-        flex: 1,
-    },
-    actionTitle: {
-        fontSize: SIZES.base,
-        fontWeight: '600',
-        color: COLORS.text,
-    },
-    actionSubtitle: {
-        fontSize: SIZES.sm,
-        color: COLORS.textSecondary,
-        marginTop: 2,
     },
 });

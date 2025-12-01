@@ -10,7 +10,7 @@ let PROVIDER_GOOGLE: any = null;
 
 if (Platform.OS !== 'web') {
     const Maps = require('react-native-maps');
-    MapView = Maps.default;
+    MapView = Maps.MapView || Maps.default; // Try MapView first, fallback to default
     Marker = Maps.Marker;
     Polyline = Maps.Polyline;
     PROVIDER_GOOGLE = Maps.PROVIDER_GOOGLE;
