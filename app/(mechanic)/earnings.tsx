@@ -14,30 +14,80 @@ export default function Earnings() {
     const router = useRouter();
     const { user } = useAuthStore();
 
-    // TODO: Fetch earnings data from Firestore
+    // Fetch real earnings data from Firestore
+    useEffect(() => {
+        if (!user) return;
+
+        const fetchEarnings = async () => {
+            try {
+                const { collection, query, where, getDocs } = require('firebase/firestore');
+                const { firestore } = require('@/services/firebase/config');
+
+                // Get completed bookings for this mechanic
+                const bookingsRef = collection(firestore, 'bookings');
+                const q = query(
+                    bookingsRef,
+                    where('mechanicId', '==', user.id),
+                    where('status', '==', 'completed')
+                );
+
+                const snapshot = await getDocs(q);
+                const bookings = snapshot.docs.map((doc: any) => {
+                    const data = doc.data();
+                    return {
+                        id: doc.id,
+                        price: data.price || 0,
+                        startedAt: data.startedAt?.toDate(),
+                        completedAt: data.completedAt?.toDate(),
+                        category: data.category,
+                    };
+                });
+
+                // Calculate total earnings
+                const totalEarnings = bookings.reduce((sum: number, b: any) => sum + b.price, 0);
+
+                // Calculate this month earnings
+                const now = new Date();
+                const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+                const thisMonthEarnings = bookings
+                    .filter((b: any) => b.completedAt >= thisMonthStart)
+                    .reduce((sum: number, b: any) => sum + b.price, 0);
+
+                setStats({
+                    totalEarnings,
+                    thisMonth: thisMonthEarnings,
+                    pendingPayouts: 0, // For now, set to 0
+                    completedJobs: bookings.length,
+                });
+
+                // Create transactions from bookings
+                const earningTransactions = bookings
+                    .slice(0, 10) // Latest 10
+                    .map((b: any) => ({
+                        id: b.id,
+                        type: 'earning',
+                        amount: b.price,
+                        description: `${b.category} Service`,
+                        date: b.completedAt?.toLocaleDateString() || 'N/A',
+                    }));
+
+                setTransactions(earningTransactions);
+            } catch (error) {
+                console.error('Error fetching earnings:', error);
+            }
+        };
+
+        fetchEarnings();
+    }, [user]);
+
     const [stats, setStats] = useState({
-        totalEarnings: 25000,
-        thisMonth: 8500,
-        pendingPayouts: 2500,
-        completedJobs: 42,
+        totalEarnings: 0,
+        thisMonth: 0,
+        pendingPayouts: 0,
+        completedJobs: 0,
     });
 
-    const [transactions, setTransactions] = useState<any[]>([
-        {
-            id: '1',
-            type: 'earning',
-            amount: 1500,
-            description: 'Car Engine Repair',
-            date: '2024-01-15',
-        },
-        {
-            id: '2',
-            type: 'purchase',
-            amount: -500,
-            description: 'Diamond Purchase (10 diamonds)',
-            date: '2024-01-14',
-        },
-    ]);
+    const [transactions, setTransactions] = useState<any[]>([]);
 
     // Chart data for last 7 days
     const chartData = {

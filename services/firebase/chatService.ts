@@ -12,7 +12,7 @@ import {
     getDocs,
     limit,
 } from 'firebase/firestore';
-import { db } from './config';
+import { firestore as db } from './config';
 
 export const createChat = async (participants: string[], bookingId: string) => {
     try {

@@ -15,7 +15,7 @@ import { subscribeToProposals, updateProposalStatus, createBooking, updateServic
 import { COLORS, SIZES } from '@/constants/theme';
 import { Proposal, ServiceRequest } from '@/types';
 import { MapView, Marker, PROVIDER_GOOGLE } from '@/utils/mapHelpers';
-import { ProposalCard } from '@/components/shared/ProposalCard';
+import { ProposalCard } from '@/components/proposal/ProposalCard';
 import { Avatar } from '@/components/shared/Avatar';
 import { useModal, showSuccessModal, showErrorModal, showConfirmModal } from '@/utils/modalService';
 
@@ -166,9 +166,9 @@ export default function Proposals() {
                                 renderItem={({ item }) => (
                                     <ProposalCard
                                         proposal={item}
-                                        onAccept={handleAcceptProposal}
-                                        onDecline={handleDeclineProposal}
-                                        accepting={accepting === item.id}
+                                        onAccept={() => handleAcceptProposal(item)}
+                                        onDecline={() => handleDeclineProposal(item)}
+                                        isProcessing={accepting === item.id}
                                     />
                                 )}
                                 showsVerticalScrollIndicator={false}
@@ -233,7 +233,7 @@ const styles = StyleSheet.create({
     },
     overlay: {
         flex: 1,
-        justifyContent: 'space-between',
+        justifyContent: 'flex-start', // Changed from flex-end to flex-start
     },
     header: {
         paddingHorizontal: 16,
@@ -260,20 +260,26 @@ const styles = StyleSheet.create({
         color: COLORS.text,
     },
     contentContainer: {
-        justifyContent: 'flex-end',
+        marginTop: 12, // Add margin from top
     },
     proposalsContainer: {
-        maxHeight: '70%',
+        maxHeight: '65%', // Limit height to keep map visible
+        backgroundColor: COLORS.surface + 'F5', // Semi-transparent background
+        borderRadius: 20,
+        marginHorizontal: 8,
+        paddingTop: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 12,
+        elevation: 8,
     },
     title: {
         fontSize: 20,
         fontWeight: 'bold',
-        color: COLORS.text, // Should be visible on map? Maybe add text shadow or background
+        color: COLORS.text,
         marginLeft: 16,
         marginBottom: 12,
-        textShadowColor: 'rgba(255, 255, 255, 0.8)',
-        textShadowOffset: { width: 0, height: 1 },
-        textShadowRadius: 4,
     },
     findingContainer: {
         padding: 16,

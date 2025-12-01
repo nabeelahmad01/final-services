@@ -52,21 +52,27 @@ export default function MechanicRequests() {
                     const mechanicData = await getMechanic(user.id);
                     if (!mechanicData) throw new Error('Mechanic data not found');
 
-                    // Create proposal
-                    await createProposal({
+                    // Create proposal object
+                    const proposalData: any = {
                         requestId: request.id,
                         customerId: request.customerId,
                         mechanicId: user.id,
                         mechanicName: user.name,
-                        mechanicPhoto: user.profilePic,
                         mechanicRating: mechanicData.rating,
                         mechanicTotalRatings: mechanicData.totalRatings,
-                        price: 2000, // TODO: Let mechanic input
+                        price: 100, // TODO: Let mechanic input
                         estimatedTime: '1-2 hours', // TODO: Let mechanic input
                         message: 'I can help you with this!',
                         distance: 2.5, // TODO: Calculate actual distance
                         status: 'pending',
-                    });
+                    };
+
+                    // Only add mechanicPhoto if it exists
+                    if (user.profilePic) {
+                        proposalData.mechanicPhoto = user.profilePic;
+                    }
+
+                    await createProposal(proposalData);
 
                     showSuccessModal(showModal, 'Success', 'Proposal submitted!');
                 } catch (error: any) {

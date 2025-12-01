@@ -5,6 +5,7 @@ import {
     StyleSheet,
     ScrollView,
     TouchableOpacity,
+    Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,15 +16,17 @@ import { useBookingStore } from '@/stores/bookingStore';
 import { useAuthStore } from '@/stores/authStore';
 import { subscribeToActiveBooking } from '@/services/firebase/firestore';
 import { createChat } from '@/services/firebase/chatService';
+import { startLocationTracking } from '@/services/location/locationTrackingService';
 import { Avatar } from '@/components/shared/Avatar';
 import { Button } from '@/components/ui/Button';
-import { useModal, showErrorModal } from '@/utils/modalService';
+import { useModal, showErrorModal, showSuccessModal, showConfirmModal } from '@/utils/modalService';
 
 export default function ActiveJob() {
     const router = useRouter();
     const { user } = useAuthStore();
     const { showModal } = useModal();
     const { activeBooking, setActiveBooking } = useBookingStore();
+    const [locationTrackingCleanup, setLocationTrackingCleanup] = React.useState<(() => void) | null>(null);
 
     React.useEffect(() => {
         if (!user) return;
@@ -31,15 +34,98 @@ export default function ActiveJob() {
         return () => unsubscribe();
     }, [user]);
 
-    const handleChat = async () => {
-        if (!user || !activeBooking) return;
-        try {
-            const chatId = await createChat([user.id, activeBooking.customerId], activeBooking.id);
-            router.push(`/(shared)/chat/${chatId}`);
-        } catch (error) {
-            console.error('Error opening chat:', error);
-            showErrorModal(showModal, 'Error', 'Could not open chat');
+    // Start location tracking when booking is active
+    React.useEffect(() => {
+        if (!activeBooking) {
+            // Stop tracking if booking ended
+            if (locationTrackingCleanup) {
+                locationTrackingCleanup();
+                setLocationTrackingCleanup(null);
+            }
+            return;
         }
+
+        // Start location tracking for this booking
+        startLocationTracking(activeBooking.id, (error) => {
+            console.error('Location tracking error:', error);
+        }).then((cleanup) => {
+            if (cleanup) {
+                setLocationTrackingCleanup(() => cleanup);
+            }
+        });
+
+        return () => {
+            if (locationTrackingCleanup) {
+                locationTrackingCleanup();
+            }
+        };
+    }, [activeBooking?.id]);
+
+    const handleChat = async () => {
+        if (!user || !activeBooking) {
+            console.log('handleChat - Missing user or activeBooking:', { hasUser: !!user, hasBooking: !!activeBooking });
+            showErrorModal(showModal, 'Error', 'Unable to open chat. Please try again.');
+            return;
+        }
+
+        try {
+            console.log('Creating chat for:', { userId: user.id, customerId: activeBooking.customerId, bookingId: activeBooking.id });
+            const chatId = await createChat([user.id, activeBooking.customerId], activeBooking.id);
+            console.log('Chat created successfully, navigating to:', `/(shared)/chat/${chatId}`);
+
+            router.push(`/(shared)/chat/${chatId}`);
+        } catch (error: any) {
+            console.error('Error opening chat:', error);
+            showErrorModal(showModal, 'Error', `Could not open chat: ${error.message || 'Unknown error'}`);
+        }
+    };
+
+    const handleNavigate = () => {
+        if (!activeBooking) {
+            console.log('handleNavigate - Missing active booking');
+            showErrorModal(showModal, 'Error', 'No active booking found');
+            return;
+        }
+
+        console.log('Navigating to navigation screen');
+        router.push('/(mechanic)/navigate');
+    };
+
+    const handleCompleteJob = async () => {
+        if (!activeBooking) return;
+
+        showConfirmModal(
+            showModal,
+            'Complete Job',
+            'Mark this job as completed?',
+            async () => {
+                try {
+                    // Stop location tracking
+                    if (locationTrackingCleanup) {
+                        locationTrackingCleanup();
+                    }
+
+                    // Update booking status to completed
+                    const { updateBooking } = require('@/services/firebase/firestore');
+                    await updateBooking(activeBooking.id, {
+                        status: 'completed',
+                        completedAt: new Date(),
+                    });
+
+                    showSuccessModal(
+                        showModal,
+                        'Job Completed!',
+                        'Great work! The customer will now rate your service.',
+                        () => router.replace('/(mechanic)/dashboard')
+                    );
+                } catch (error: any) {
+                    showErrorModal(showModal, 'Error', error.message);
+                }
+            },
+            undefined,
+            'Complete',
+            'Cancel'
+        );
     };
 
     if (!activeBooking) {
@@ -96,13 +182,13 @@ export default function ActiveJob() {
                     <View style={styles.actionButtons}>
                         <Button
                             title="Navigate"
-                            onPress={() => {/* TODO: Open Maps */ }}
+                            onPress={handleNavigate}
                             style={{ flex: 1 }}
                             variant="outline"
                         />
                         <Button
                             title="Complete Job"
-                            onPress={() => {/* TODO: Complete Job logic */ }}
+                            onPress={handleCompleteJob}
                             style={{ flex: 1 }}
                         />
                     </View>

@@ -59,8 +59,35 @@ export default function TrackingScreen() {
             }
         });
 
-        return () => unsubscribe();
-    }, [activeBooking]);
+        // Subscribe to booking status changes
+        const { doc, onSnapshot } = require('firebase/firestore');
+        const { firestore } = require('@/services/firebase/config');
+        const bookingUnsubscribe = onSnapshot(
+            doc(firestore, 'bookings', activeBooking.id),
+            (snapshot: any) => {
+                if (snapshot.exists()) {
+                    const data = snapshot.data();
+                    if (data.status === 'completed') {
+                        // Redirect to rating screen
+                        router.replace({
+                            pathname: '/(customer)/rate-mechanic',
+                            params: {
+                                bookingId: activeBooking.id,
+                                mechanicId: activeBooking.mechanicId,
+                                mechanicName: mechanic?.name || 'Mechanic',
+                                mechanicPhoto: mechanic?.profilePic,
+                            },
+                        });
+                    }
+                }
+            }
+        );
+
+        return () => {
+            unsubscribe();
+            bookingUnsubscribe();
+        };
+    }, [activeBooking, mechanic]);
 
     const handleCall = () => {
         if (mechanic) {
@@ -76,13 +103,25 @@ export default function TrackingScreen() {
     };
 
     const handleChat = async () => {
-        if (!user || !mechanic || !activeBooking) return;
+        if (!user || !mechanic || !activeBooking) {
+            console.log('handleChat - Missing required data:', {
+                hasUser: !!user,
+                hasMechanic: !!mechanic,
+                hasBooking: !!activeBooking
+            });
+            showErrorModal(showModal, 'Error', 'Unable to open chat. Please try again.');
+            return;
+        }
+
         try {
+            console.log('Creating chat for:', { userId: user.id, mechanicId: mechanic.id, bookingId: activeBooking.id });
             const chatId = await createChat([user.id, mechanic.id], activeBooking.id);
+            console.log('Chat created successfully, navigating to:', `/(shared)/chat/${chatId}`);
+
             router.push(`/(shared)/chat/${chatId}`);
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error opening chat:', error);
-            showErrorModal(showModal, 'Error', 'Could not open chat');
+            showErrorModal(showModal, 'Error', `Could not open chat: ${error.message || 'Unknown error'}`);
         }
     };
 
