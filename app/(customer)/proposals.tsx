@@ -98,9 +98,21 @@ export default function Proposals() {
         }
     };
 
-    const adjustFare = (amount: number) => {
-        setOfferedPrice(prev => Math.max(0, prev + amount));
-        // In real app, update Firestore here
+
+    const adjustFare = async (amount: number) => {
+        const newPrice = Math.max(50, offeredPrice + amount); // Minimum 50 PKR
+        setOfferedPrice(newPrice);
+
+        try {
+            // Update in Firestore
+            const { doc, updateDoc } = await import('firebase/firestore');
+            const { firestore } = await import('@/services/firebase/config');
+            await updateDoc(doc(firestore, 'serviceRequests', requestId), {
+                offeredPrice: newPrice,
+            });
+        } catch (error) {
+            console.error('Error updating fare:', error);
+        }
     };
 
     const renderMap = () => {
@@ -133,7 +145,7 @@ export default function Proposals() {
         <View style={styles.container}>
             {renderMap()}
 
-            <SafeAreaView style={styles.overlay} edges={['top']}>
+            <SafeAreaView style={styles.overlay} edges={['top', 'bottom']}>
                 {/* Header */}
                 <View style={styles.header}>
                     <TouchableOpacity
@@ -155,28 +167,29 @@ export default function Proposals() {
                     </TouchableOpacity>
                 </View>
 
-                {/* Content */}
-                <View style={styles.contentContainer}>
-                    {proposals.length > 0 ? (
-                        <View style={styles.proposalsContainer}>
-                            <Text style={styles.title}>Choose a driver</Text>
-                            <FlatList
-                                data={proposals}
-                                keyExtractor={item => item.id}
-                                renderItem={({ item }) => (
-                                    <ProposalCard
-                                        proposal={item}
-                                        onAccept={() => handleAcceptProposal(item)}
-                                        onDecline={() => handleDeclineProposal(item)}
-                                        isProcessing={accepting === item.id}
-                                    />
-                                )}
-                                showsVerticalScrollIndicator={false}
-                                contentContainerStyle={{ paddingBottom: 20 }}
-                            />
-                        </View>
-                    ) : (
-                        <View style={styles.findingContainer}>
+                {proposals.length > 0 ? (
+                    /* Proposals at TOP */
+                    <View style={styles.proposalsContainer}>
+                        <Text style={styles.title}>Choose a driver</Text>
+                        <FlatList
+                            data={proposals}
+                            keyExtractor={item => item.id}
+                            renderItem={({ item }) => (
+                                <ProposalCard
+                                    proposal={item}
+                                    onAccept={() => handleAcceptProposal(item)}
+                                    onDecline={() => handleDeclineProposal(item)}
+                                    isProcessing={accepting === item.id}
+                                />
+                            )}
+                            showsVerticalScrollIndicator={false}
+                            contentContainerStyle={{ paddingBottom: 20 }}
+                        />
+                    </View>
+                ) : (
+                    <>
+                        {/* Drivers Viewing at BOTTOM */}
+                        <View style={styles.driversViewingContainer}>
                             <View style={styles.driversViewing}>
                                 <Text style={styles.viewingText}>
                                     {driversViewing} drivers are viewing your request
@@ -186,7 +199,10 @@ export default function Proposals() {
                                     <Avatar name="D 2" size={24} />
                                 </View>
                             </View>
+                        </View>
 
+                        {/* Fare Card at BOTTOM */}
+                        <View style={styles.fareCardContainer}>
                             <View style={styles.negotiationCard}>
                                 <View style={styles.negotiationHeader}>
                                     <Text style={styles.negotiationTitle}>
@@ -219,8 +235,8 @@ export default function Proposals() {
                                 </TouchableOpacity>
                             </View>
                         </View>
-                    )}
-                </View>
+                    </>
+                )}
             </SafeAreaView>
         </View>
     );
@@ -259,15 +275,14 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: COLORS.text,
     },
-    contentContainer: {
-        marginTop: 12, // Add margin from top
-    },
+
     proposalsContainer: {
-        maxHeight: '65%', // Limit height to keep map visible
-        backgroundColor: COLORS.surface + 'F5', // Semi-transparent background
+        marginTop: 12,
+        maxHeight: '70%',
+        backgroundColor: COLORS.surface,
         borderRadius: 20,
         marginHorizontal: 8,
-        paddingTop: 12,
+        paddingTop: 16,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.2,
@@ -281,8 +296,20 @@ const styles = StyleSheet.create({
         marginLeft: 16,
         marginBottom: 12,
     },
-    findingContainer: {
-        padding: 16,
+    driversViewingContainer: {
+        position: 'absolute',
+        bottom: 220,
+        left: 0,
+        right: 0,
+        paddingHorizontal: 16,
+    },
+    fareCardContainer: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        paddingHorizontal: 16,
+        paddingBottom: 16,
     },
     driversViewing: {
         flexDirection: 'row',
@@ -291,7 +318,6 @@ const styles = StyleSheet.create({
         backgroundColor: COLORS.surface,
         padding: 12,
         borderRadius: 12,
-        marginBottom: 12,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,

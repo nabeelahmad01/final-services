@@ -36,7 +36,7 @@ export default function ActiveJob() {
 
     // Start location tracking when booking is active
     React.useEffect(() => {
-        if (!activeBooking) {
+        if (!activeBooking || !user) {
             // Stop tracking if booking ended
             if (locationTrackingCleanup) {
                 locationTrackingCleanup();
@@ -45,8 +45,8 @@ export default function ActiveJob() {
             return;
         }
 
-        // Start location tracking for this booking
-        startLocationTracking(activeBooking.id, (error) => {
+        // Start location tracking with userId (not bookingId)
+        startLocationTracking(user.id, (error) => {
             console.error('Location tracking error:', error);
         }).then((cleanup) => {
             if (cleanup) {
@@ -59,7 +59,7 @@ export default function ActiveJob() {
                 locationTrackingCleanup();
             }
         };
-    }, [activeBooking?.id]);
+    }, [activeBooking?.id, user?.id]);
 
     const handleChat = async () => {
         if (!user || !activeBooking) {
@@ -160,39 +160,82 @@ export default function ActiveJob() {
                     <View style={{ width: 24 }} />
                 </View>
 
+                {/* Customer Card */}
                 <View style={styles.card}>
                     <View style={styles.customerInfo}>
                         <Avatar name={activeBooking.customerName || 'Customer'} size={60} />
                         <View style={styles.customerDetails}>
                             <Text style={styles.customerName}>{activeBooking.customerName}</Text>
                             <Text style={styles.serviceType}>{activeBooking.category}</Text>
+                            <Text style={styles.phoneNumber}>{activeBooking.customerPhone || 'No phone'}</Text>
                         </View>
-                        <TouchableOpacity style={styles.chatButton} onPress={handleChat}>
-                            <Ionicons name="chatbubble-ellipses" size={24} color={COLORS.primary} />
-                        </TouchableOpacity>
                     </View>
 
                     <View style={styles.divider} />
 
-                    <View style={styles.locationInfo}>
-                        <Ionicons name="location" size={24} color={COLORS.primary} />
-                        <Text style={styles.address}>{activeBooking.customerLocation?.address || 'Address not available'}</Text>
+                    {/* Location */}
+                    <View style={styles.locationSection}>
+                        <View style={styles.locationRow}>
+                            <Ionicons name="location" size={20} color={COLORS.success} />
+                            <Text style={styles.locationLabel}>Customer Location</Text>
+                        </View>
+                        <Text style={styles.address}>
+                            {activeBooking.customerLocation?.address || 'Address not available'}
+                        </Text>
                     </View>
 
-                    <View style={styles.actionButtons}>
-                        <Button
-                            title="Navigate"
-                            onPress={handleNavigate}
-                            style={{ flex: 1 }}
-                            variant="outline"
-                        />
-                        <Button
-                            title="Complete Job"
-                            onPress={handleCompleteJob}
-                            style={{ flex: 1 }}
-                        />
+                    <View style={styles.divider} />
+
+                    {/* Price */}
+                    <View style={styles.priceSection}>
+                        <Ionicons name="cash-outline" size={20} color={COLORS.text} />
+                        <Text style={styles.priceText}>PKR {activeBooking.price} Cash</Text>
                     </View>
                 </View>
+
+                {/* Action Buttons - BIG & VISIBLE */}
+                <View style={styles.bigActionButtons}>
+                    <TouchableOpacity style={styles.bigButton} onPress={handleChat}>
+                        <View style={[styles.bigButtonIcon, { backgroundColor: COLORS.primary }]}>
+                            <Ionicons name="chatbubble" size={28} color={COLORS.white} />
+                        </View>
+                        <Text style={styles.bigButtonLabel}>Chat</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={styles.bigButton} onPress={() => {
+                        if (activeBooking) {
+                            router.push({
+                                pathname: '/(shared)/call',
+                                params: {
+                                    userId: activeBooking.customerId,
+                                    userName: activeBooking.customerName,
+                                    callType: 'voice'
+                                },
+                            });
+                        }
+                    }}>
+                        <View style={[styles.bigButtonIcon, { backgroundColor: COLORS.success }]}>
+                            <Ionicons name="call" size={28} color={COLORS.white} />
+                        </View>
+                        <Text style={styles.bigButtonLabel}>Call</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={styles.bigButton} onPress={handleNavigate}>
+                        <View style={[styles.bigButtonIcon, { backgroundColor: COLORS.secondary }]}>
+                            <Ionicons name="navigate" size={28} color={COLORS.white} />
+                        </View>
+                        <Text style={styles.bigButtonLabel}>Navigate</Text>
+                    </TouchableOpacity>
+                </View>
+
+                {/* Complete Job Button - VERY VISIBLE */}
+                <TouchableOpacity
+                    style={styles.completeButton}
+                    onPress={handleCompleteJob}
+                >
+                    <Ionicons name="checkmark-circle" size={24} color={COLORS.white} />
+                    <Text style={styles.completeButtonText}>Complete Job</Text>
+                </TouchableOpacity>
             </ScrollView>
         </SafeAreaView>
     );
@@ -262,6 +305,11 @@ const styles = StyleSheet.create({
         color: COLORS.textSecondary,
         marginTop: 2,
     },
+    phoneNumber: {
+        fontSize: SIZES.sm,
+        color: COLORS.text,
+        marginTop: 4,
+    },
     chatButton: {
         padding: 8,
         backgroundColor: COLORS.primary + '10',
@@ -272,6 +320,19 @@ const styles = StyleSheet.create({
         backgroundColor: COLORS.border,
         marginVertical: 16,
     },
+    locationSection: {
+        gap: 8,
+    },
+    locationRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    locationLabel: {
+        fontSize: SIZES.sm,
+        fontWeight: '600',
+        color: COLORS.text,
+    },
     locationInfo: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -279,9 +340,67 @@ const styles = StyleSheet.create({
         marginBottom: 24,
     },
     address: {
-        flex: 1,
         fontSize: SIZES.base,
         color: COLORS.text,
+        lineHeight: 20,
+    },
+    priceSection: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    priceText: {
+        fontSize: SIZES.base,
+        fontWeight: '600',
+        color: COLORS.text,
+    },
+    bigActionButtons: {
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        marginTop: 24,
+        marginBottom: 16,
+        paddingHorizontal: 20,
+    },
+    bigButton: {
+        alignItems: 'center',
+        gap: 8,
+    },
+    bigButtonIcon: {
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 8,
+    },
+    bigButtonLabel: {
+        fontSize: SIZES.sm,
+        fontWeight: '600',
+        color: COLORS.text,
+    },
+    completeButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: COLORS.success,
+        paddingVertical: 16,
+        borderRadius: 12,
+        marginTop: 16,
+        gap: 8,
+        shadowColor: COLORS.success,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.4,
+        shadowRadius: 8,
+        elevation: 8,
+    },
+    completeButtonText: {
+        fontSize: SIZES.lg,
+        fontWeight: 'bold',
+        color: COLORS.white,
     },
     actionButtons: {
         flexDirection: 'row',

@@ -97,7 +97,7 @@ export default function MechanicLayout() {
                 }}
             />
             <Tabs.Screen
-                name="job-details"
+                name="navigate"
                 options={{
                     href: null,
                 }}

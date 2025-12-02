@@ -47,16 +47,28 @@ export const sendMessage = async (chatId: string, message: any) => {
     try {
         const messagesRef = collection(db, 'chats', chatId, 'messages');
 
+        // Clean message object - remove undefined values
+        const cleanMessage = {
+            text: message.text || '',
+            user: {
+                _id: message.user?._id || '',
+                name: message.user?.name || 'User',
+                ...(message.user?.avatar && { avatar: message.user.avatar })
+            },
+            ...(message.image && { image: message.image }),
+            ...(message.video && { video: message.video }),
+        };
+
         // Add message to subcollection
         await addDoc(messagesRef, {
-            ...message,
+            ...cleanMessage,
             createdAt: serverTimestamp(),
         });
 
-        // Update last message in chat document
+        // Update last message in chat document  
         const chatRef = doc(db, 'chats', chatId);
         await updateDoc(chatRef, {
-            lastMessage: message,
+            lastMessage: cleanMessage,
             updatedAt: serverTimestamp(),
         });
     } catch (error) {

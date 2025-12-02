@@ -88,6 +88,7 @@ export interface Booking {
     id: string;
     customerId: string;
     customerName?: string;
+    customerPhone?: string;
     customerPhoto?: string;
     mechanicId: string;
     requestId: string;

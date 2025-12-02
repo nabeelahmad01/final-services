@@ -90,12 +90,15 @@ export const subscribeMechanicLiveLocation = (
     });
 };
 
-// Start tracking mechanic location (call this when booking starts)
+// Start tracking mechanic location (works for both idle and active job)
 export const startLocationTracking = async (
-    bookingId: string,
+    userId: string,
     onError?: (error: Error) => void
 ): Promise<(() => void) | null> => {
     try {
+        // Import Realtime DB update function
+        const { updateLocation } = await import('../firebase/realtimeDb');
+
         // Request location permissions
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
@@ -111,7 +114,8 @@ export const startLocationTracking = async (
             },
             async (location) => {
                 try {
-                    await updateMechanicLiveLocation(bookingId, {
+                    // Update in Realtime Database (works for idle and active)
+                    await updateLocation(userId, {
                         latitude: location.coords.latitude,
                         longitude: location.coords.longitude,
                         timestamp: location.timestamp,

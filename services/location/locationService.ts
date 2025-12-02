@@ -110,8 +110,14 @@ export const reverseGeocode = async (
 export const getDirections = async (
     origin: { latitude: number; longitude: number },
     destination: { latitude: number; longitude: number }
-) => {
+): Promise<any | null> => {
     const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
+
+    // Return null silently if no API key
+    if (!apiKey) {
+        return null;
+    }
+
     const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin.latitude},${origin.longitude}&destination=${destination.latitude},${destination.longitude}&key=${apiKey}`;
 
     try {
@@ -130,10 +136,11 @@ export const getDirections = async (
             };
         }
 
-        throw new Error('No route found');
+        // Return null for any API errors (quota exceeded, no route, etc.)
+        return null;
     } catch (error) {
-        console.error('Error fetching directions:', error);
-        throw error;
+        // Silently return null - app will work without route line
+        return null;
     }
 };
 

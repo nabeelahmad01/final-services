@@ -42,19 +42,36 @@ export default function TrackingScreen() {
 
         const unsubscribe = subscribeToLocation(activeBooking.mechanicId, (location) => {
             if (location) {
+                console.log('Mechanic location updated:', location);
                 setMechanicLocation({
                     latitude: location.latitude,
                     longitude: location.longitude,
                 });
 
-                if (activeBooking.customerLocation) {
+                // Only update route if both locations are valid
+                if (activeBooking.customerLocation && location.latitude && location.longitude) {
+                    console.log('Fetching route from:', location, 'to:', activeBooking.customerLocation);
+
                     getDirections(
                         { latitude: location.latitude, longitude: location.longitude },
                         activeBooking.customerLocation
-                    ).then((result: any) => {
-                        setDuration(result.duration);
-                        setRoute(decodePolyline(result.polyline));
-                    }).catch((err: any) => console.error('Route error:', err));
+                    ).then((result) => {
+                        console.log('Directions API result:', result);
+
+                        // getDirections now returns null on error instead of throwing
+                        if (result && result.polyline) {
+                            console.log('Route found! Duration:', result.duration, 'Polyline length:', result.polyline.length);
+                            setDuration(result.duration || 0);
+                            const decodedRoute = decodePolyline(result.polyline);
+                            console.log('Decoded route points:', decodedRoute.length);
+                            setRoute(decodedRoute);
+                        } else {
+                            console.log('No route in result - clearing route');
+                            // No route available - clear previous route
+                            setRoute([]);
+                            setDuration(0);
+                        }
+                    });
                 }
             }
         });
