@@ -1,0 +1,3 @@
+// Empty notification sound file placeholder
+// In production, replace with actual mp3 file
+export default null;

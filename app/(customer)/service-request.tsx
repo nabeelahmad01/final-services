@@ -18,7 +18,8 @@ import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplet
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useAuthStore } from '@/stores/authStore';
-import { createServiceRequest } from '@/services/firebase/firestore';
+import { createServiceRequest, getNearbyMechanics } from '@/services/firebase/firestore';
+import { notifyNewServiceRequest } from '@/services/firebase/notifications';
 import { COLORS, SIZES, CATEGORIES } from '@/constants/theme';
 import { ServiceCategory } from '@/types';
 import { MapView, Marker, PROVIDER_GOOGLE } from '@/utils/mapHelpers';
@@ -170,9 +171,28 @@ export default function ServiceRequest() {
                 urgency: 'medium',
             });
 
+            // 🚀 NEW: Find nearby mechanics and notify them
+            console.log('Finding nearby mechanics within 10km...');
+            const nearbyMechanics = await getNearbyMechanics(location, category, 10);
+            console.log(`Found ${nearbyMechanics.length} nearby mechanics`);
+
+            // Send notifications to all nearby mechanics
+            for (const mechanic of nearbyMechanics) {
+                try {
+                    await notifyNewServiceRequest(
+                        requestId,
+                        categoryInfo?.name || category,
+                        user.name
+                    );
+                    console.log(`✅ Notified mechanic: ${mechanic.name}`);
+                } catch (error) {
+                    console.log(`❌ Failed to notify mechanic ${mechanic.id}:`, error);
+                }
+            }
+
             showModal({
                 title: 'Success',
-                message: 'Service request created! Mechanics will send proposals soon.',
+                message: `Service request created! ${nearbyMechanics.length} mechanics notified.`,
                 type: 'success',
                 buttons: [
                     {

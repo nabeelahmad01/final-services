@@ -24,6 +24,7 @@ import {
     createProposal,
     updateMechanicDiamonds
 } from '@/services/firebase/firestore';
+import { notifyNewProposal } from '@/services/firebase/notifications';
 import { COLORS, SIZES, CATEGORIES } from '@/constants/theme';
 import { Mechanic, ServiceRequest } from '@/types';
 import { useModal, showSuccessModal, showErrorModal } from '@/utils/modalService';
@@ -145,7 +146,15 @@ export default function MechanicDashboard() {
                 proposalData.mechanicPhoto = user.profilePic;
             }
 
-            await createProposal(proposalData);
+            const proposalId = await createProposal(proposalData);
+
+            // 🚀 NEW: Notify customer about new proposal
+            try {
+                await notifyNewProposal(proposalId, user.name, parseInt(proposalPrice));
+                console.log('✅ Customer notified of new proposal');
+            } catch (error) {
+                console.log('❌ Failed to notify customer:', error);
+            }
 
             setProposalModalVisible(false);
             setProposalPrice('');
