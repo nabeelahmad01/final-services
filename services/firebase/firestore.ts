@@ -106,6 +106,18 @@ export const createProposal = async (proposal: Omit<Proposal, 'id' | 'createdAt'
     return docRef.id;
 };
 
+export const getProposal = async (id: string): Promise<Proposal | null> => {
+    const docSnap = await getDoc(doc(firestore, 'proposals', id));
+    if (!docSnap.exists()) return null;
+
+    const data = docSnap.data();
+    return {
+        id: docSnap.id,
+        ...data,
+        createdAt: data.createdAt.toDate(),
+    } as Proposal;
+};
+
 export const subscribeToProposals = (
     requestId: string,
     callback: (proposals: Proposal[]) => void

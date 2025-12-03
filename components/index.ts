@@ -14,3 +14,4 @@ export { ErrorState } from './shared/ErrorState';
 export { BannerNotification } from './shared/BannerNotification';
 export { ActiveJobCard } from './shared/ActiveJobCard';
 export { FloatingActiveJobButton } from './shared/FloatingActiveJobButton';
+export { ServiceRequestModal } from './shared/ServiceRequestModal';

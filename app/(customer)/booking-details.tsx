@@ -40,16 +40,6 @@ export default function BookingDetails() {
         router.push('/(customer)/tracking');
     };
 
-    const handleLeaveReview = () => {
-        router.push({
-            pathname: '/(customer)/leave-review',
-            params: {
-                bookingId: booking.id,
-                mechanicName: booking.mechanicName,
-            },
-        });
-    };
-
     return (
         <SafeAreaView style={styles.container}>
             {/* Header */}
@@ -141,15 +131,6 @@ export default function BookingDetails() {
                         title="Track Mechanic"
                         onPress={handleTrack}
                         icon={<Ionicons name="navigate" size={20} color={COLORS.white} />}
-                        style={styles.actionButton}
-                    />
-                )}
-
-                {booking.status === 'completed' && (
-                    <Button
-                        title="Leave a Review"
-                        onPress={handleLeaveReview}
-                        icon={<Ionicons name="star" size={20} color={COLORS.white} />}
                         style={styles.actionButton}
                     />
                 )}

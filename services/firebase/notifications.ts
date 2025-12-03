@@ -157,12 +157,32 @@ export const notifyNewServiceRequest = (requestId: string, category: string, cus
     });
 };
 
-export const notifyNewProposal = (proposalId: string, mechanicName: string, price: number) => {
-    return triggerNotification({
+export const notifyNewProposal = async (proposalId: string, mechanicName: string, price: number) => {
+    // Get proposal to find customer ID
+    const { getProposal, createNotification } = await import('./firestore');
+    const proposal = await getProposal(proposalId);
+
+    if (!proposal) {
+        console.error('Proposal not found:', proposalId);
+        return;
+    }
+
+    // Show banner notification locally (for current user if they're the customer)
+    showBannerNotification({
         type: 'new_proposal',
         title: '💼 New Proposal Received',
         body: `${mechanicName} sent a proposal for PKR ${price}`,
         data: { proposalId },
+    });
+
+    // Create notification in Firestore for the CUSTOMER
+    await createNotification({
+        userId: proposal.customerId, // Send to customer, not mechanic!
+        type: 'new_proposal',
+        title: '💼 New Proposal Received',
+        message: `${mechanicName} sent a proposal for PKR ${price}`,
+        data: { proposalId },
+        read: false
     });
 };
 

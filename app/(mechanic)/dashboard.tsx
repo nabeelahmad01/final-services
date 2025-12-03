@@ -6,8 +6,6 @@ import {
     ScrollView,
     TouchableOpacity,
     RefreshControl,
-    Modal,
-    TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -22,7 +20,7 @@ import {
     subscribeToServiceRequests,
     subscribeToActiveBooking,
     createProposal,
-    updateMechanicDiamonds
+    updateMechanicDiamonds,
 } from '@/services/firebase/firestore';
 import { notifyNewProposal } from '@/services/firebase/notifications';
 import { COLORS, SIZES, CATEGORIES } from '@/constants/theme';
@@ -30,6 +28,7 @@ import { Mechanic, ServiceRequest } from '@/types';
 import { useModal, showSuccessModal, showErrorModal } from '@/utils/modalService';
 import { startLocationTracking } from '@/services/location/locationTrackingService';
 import { calculateDistance } from '@/services/location/locationService';
+import { ServiceRequestModal } from '@/components/shared/ServiceRequestModal';
 
 export default function MechanicDashboard() {
     const router = useRouter();
@@ -39,12 +38,11 @@ export default function MechanicDashboard() {
     const [refreshing, setRefreshing] = useState(false);
     const [activeBooking, setActiveBooking] = useState<any>(null);
     const [serviceRequests, setServiceRequests] = useState<ServiceRequest[]>([]);
-    const [proposalModalVisible, setProposalModalVisible] = useState(false);
-    const [selectedRequest, setSelectedRequest] = useState<ServiceRequest | null>(null);
-    const [proposalPrice, setProposalPrice] = useState('');
-    const [proposalTime, setProposalTime] = useState('');
-    const [proposalMessage, setProposalMessage] = useState('');
+    const [cancelledRequests, setCancelledRequests] = useState<Set<string>>(new Set());
     const [submitting, setSubmitting] = useState(false);
+
+    // Get first request that hasn't been cancelled
+    const currentRequest = serviceRequests.find(r => !cancelledRequests.has(r.id)) || null;
 
     useEffect(() => {
         if (!user) return;
@@ -94,21 +92,8 @@ export default function MechanicDashboard() {
         setRefreshing(false);
     };
 
-    const handleOpenProposalModal = (request: ServiceRequest) => {
-        setSelectedRequest(request);
-        setProposalPrice(request.offeredPrice?.toString() || '');
-        setProposalTime('30 min');
-        setProposalMessage('I can help you with this!');
-        setProposalModalVisible(true);
-    };
-
-    const handleSubmitProposal = async () => {
-        if (!user || !selectedRequest || !mechanic) return;
-
-        if (!proposalPrice || !proposalTime) {
-            showErrorModal(showModal, 'Error', 'Please enter price and estimated time');
-            return;
-        }
+    const handleSubmitProposal = async (price: string, time: string, message: string) => {
+        if (!user || !currentRequest || !mechanic) return;
 
         setSubmitting(true);
         try {
@@ -117,26 +102,26 @@ export default function MechanicDashboard() {
 
             // Calculate actual distance if both have locations
             let actualDistance = 2.5; // Default
-            if (mechanic.location && selectedRequest.location) {
+            if (mechanic.location && currentRequest.location) {
                 actualDistance = calculateDistance(
                     mechanic.location.latitude,
                     mechanic.location.longitude,
-                    selectedRequest.location.latitude,
-                    selectedRequest.location.longitude
+                    currentRequest.location.latitude,
+                    currentRequest.location.longitude
                 );
             }
 
             // Create proposal object
             const proposalData: any = {
-                requestId: selectedRequest.id,
-                customerId: selectedRequest.customerId,
+                requestId: currentRequest.id,
+                customerId: currentRequest.customerId,
                 mechanicId: user.id,
                 mechanicName: user.name,
                 mechanicRating: mechanic.rating,
                 mechanicTotalRatings: mechanic.totalRatings,
-                price: parseInt(proposalPrice),
-                estimatedTime: proposalTime,
-                message: proposalMessage,
+                price: parseInt(price),
+                estimatedTime: time,
+                message: message,
                 distance: actualDistance,
                 status: 'pending',
             };
@@ -148,24 +133,30 @@ export default function MechanicDashboard() {
 
             const proposalId = await createProposal(proposalData);
 
-            // 🚀 NEW: Notify customer about new proposal
+            // 🚀 Notify customer about new proposal
             try {
-                await notifyNewProposal(proposalId, user.name, parseInt(proposalPrice));
+                await notifyNewProposal(proposalId, user.name, parseInt(price));
                 console.log('✅ Customer notified of new proposal');
             } catch (error) {
                 console.log('❌ Failed to notify customer:', error);
             }
 
-            setProposalModalVisible(false);
-            setProposalPrice('');
-            setProposalTime('');
-            setProposalMessage('');
+            // Mark this request as handled (cancelled) so it doesn't show again
+            setCancelledRequests(prev => new Set(prev).add(currentRequest.id));
+
             showSuccessModal(showModal, 'Success', 'Proposal submitted!');
         } catch (error: any) {
             showErrorModal(showModal, 'Error', error.message);
         } finally {
             setSubmitting(false);
         }
+    };
+
+    const handleCancelRequest = () => {
+        if (!currentRequest) return;
+
+        // Mark as cancelled so it doesn't show again
+        setCancelledRequests(prev => new Set(prev).add(currentRequest.id));
     };
 
     // Show loading spinner while fetching mechanic data
@@ -257,101 +248,6 @@ export default function MechanicDashboard() {
                     </Card>
                 </View>
 
-                {/* Service Requests Section */}
-                {mechanic.isVerified && (
-                    <View style={styles.section}>
-                        <Text style={styles.sectionTitle}>
-                            Nearby Service Requests ({serviceRequests.length})
-                        </Text>
-
-                        {serviceRequests.length > 0 ? (
-                            serviceRequests.slice(0, 3).map((request) => {
-                                const category = CATEGORIES.find((c) => c.id === request.category);
-                                return (
-                                    <Card key={request.id} style={styles.requestCardDashboard}>
-                                        {/* Category Header */}
-                                        <View style={styles.requestHeader}>
-                                            <View
-                                                style={[
-                                                    styles.categoryIconSmall,
-                                                    { backgroundColor: category?.color + '20' },
-                                                ]}
-                                            >
-                                                <Ionicons
-                                                    name={category?.icon as any}
-                                                    size={20}
-                                                    color={category?.color}
-                                                />
-                                            </View>
-                                            <View style={{ flex: 1 }}>
-                                                <Text style={styles.requestCategory}>{category?.name}</Text>
-                                                <Text style={styles.requestCustomer}>
-                                                    {request.customerName}
-                                                </Text>
-                                            </View>
-                                            <View style={styles.priceBadge}>
-                                                <Text style={styles.priceText}>
-                                                    PKR {request.offeredPrice || 260}
-                                                </Text>
-                                            </View>
-                                        </View>
-
-                                        {/* Description */}
-                                        <Text style={styles.requestDescription} numberOfLines={2}>
-                                            {request.description}
-                                        </Text>
-
-                                        {/* Location Info */}
-                                        <View style={styles.requestFooter}>
-                                            <View style={styles.locationBadge}>
-                                                <Ionicons
-                                                    name="location-outline"
-                                                    size={14}
-                                                    color={COLORS.textSecondary}
-                                                />
-                                                <Text style={styles.locationText}>Nearby</Text>
-                                            </View>
-                                            <TouchableOpacity
-                                                style={styles.submitProposalButton}
-                                                onPress={() => handleOpenProposalModal(request)}
-                                            >
-                                                <Ionicons name="add-circle" size={18} color={COLORS.white} />
-                                                <Text style={styles.submitProposalText}>
-                                                    Submit Proposal
-                                                </Text>
-                                            </TouchableOpacity>
-                                        </View>
-                                    </Card>
-                                );
-                            })
-                        ) : (
-                            <Card style={styles.emptyCard}>
-                                <Ionicons
-                                    name="document-text-outline"
-                                    size={48}
-                                    color={COLORS.textSecondary}
-                                />
-                                <Text style={styles.emptyCardText}>No requests available</Text>
-                                <Text style={styles.emptyCardSubtext}>
-                                    New service requests will appear here
-                                </Text>
-                            </Card>
-                        )}
-
-                        {serviceRequests.length > 3 && (
-                            <TouchableOpacity
-                                style={styles.viewAllButton}
-                                onPress={() => router.push('/(mechanic)/requests')}
-                            >
-                                <Text style={styles.viewAllText}>
-                                    View All {serviceRequests.length} Requests
-                                </Text>
-                                <Ionicons name="arrow-forward" size={20} color={COLORS.primary} />
-                            </TouchableOpacity>
-                        )}
-                    </View>
-                )}
-
                 {/* Quick Actions */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Quick Actions</Text>
@@ -388,104 +284,12 @@ export default function MechanicDashboard() {
                 </View>
             </ScrollView>
 
-            {/* Proposal Input Modal */}
-            <Modal
-                visible={proposalModalVisible}
-                animationType="slide"
-                transparent
-                onRequestClose={() => setProposalModalVisible(false)}
-            >
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
-                        <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>Submit Proposal</Text>
-                            <TouchableOpacity onPress={() => setProposalModalVisible(false)}>
-                                <Ionicons name="close" size={24} color={COLORS.text} />
-                            </TouchableOpacity>
-                        </View>
-
-                        <View style={styles.costBadgeModal}>
-                            <Ionicons name="diamond" size={16} color={COLORS.primary} />
-                            <Text style={styles.costTextModal}>1 Diamond will be deducted</Text>
-                        </View>
-
-                        {selectedRequest && (
-                            <View style={styles.customerInfo}>
-                                <Ionicons name="person" size={18} color={COLORS.textSecondary} />
-                                <Text style={styles.customerInfoText}>
-                                    {selectedRequest.customerName} - {selectedRequest.category}
-                                </Text>
-                            </View>
-                        )}
-
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.inputLabel}>Your Price (PKR)</Text>
-                            <View style={styles.priceInputContainer}>
-                                <TextInput
-                                    style={styles.priceInput}
-                                    value={proposalPrice}
-                                    onChangeText={setProposalPrice}
-                                    keyboardType="numeric"
-                                    placeholder="Enter your price"
-                                    placeholderTextColor={COLORS.textSecondary}
-                                />
-                                <TouchableOpacity
-                                    style={styles.useCustomerPriceButton}
-                                    onPress={() =>
-                                        setProposalPrice(selectedRequest?.offeredPrice?.toString() || '260')
-                                    }
-                                >
-                                    <Text style={styles.useCustomerPriceText}>
-                                        Use customer's price
-                                    </Text>
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.inputLabel}>Estimated Time</Text>
-                            <TextInput
-                                style={styles.textInput}
-                                value={proposalTime}
-                                onChangeText={setProposalTime}
-                                placeholder="e.g., 30 min, 1-2 hours"
-                                placeholderTextColor={COLORS.textSecondary}
-                            />
-                        </View>
-
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.inputLabel}>Message (Optional)</Text>
-                            <TextInput
-                                style={[styles.textInput, styles.textArea]}
-                                value={proposalMessage}
-                                onChangeText={setProposalMessage}
-                                placeholder="Tell the customer why you're the best choice..."
-                                placeholderTextColor={COLORS.textSecondary}
-                                multiline
-                                numberOfLines={3}
-                            />
-                        </View>
-
-                        <View style={styles.modalButtons}>
-                            <TouchableOpacity
-                                style={styles.modalCancelButton}
-                                onPress={() => setProposalModalVisible(false)}
-                            >
-                                <Text style={styles.modalCancelText}>Cancel</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={[styles.modalSubmitButton, submitting && styles.modalSubmitButtonDisabled]}
-                                onPress={handleSubmitProposal}
-                                disabled={submitting}
-                            >
-                                <Text style={styles.modalSubmitText}>
-                                    {submitting ? 'Submitting...' : 'Submit Proposal'}
-                                </Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </View>
-            </Modal>
+            {/* Service Request Modal - Auto-shows when new request arrives */}
+            <ServiceRequestModal
+                request={currentRequest}
+                onSubmitProposal={handleSubmitProposal}
+                onCancel={handleCancelRequest}
+            />
         </SafeAreaView>
     );
 }
