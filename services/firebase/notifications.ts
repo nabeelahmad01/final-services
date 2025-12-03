@@ -3,6 +3,8 @@ import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import { doc, updateDoc } from 'firebase/firestore';
 import { firestore } from './config';
+import { useBannerStore } from '@/stores/useBannerStore';
+import { playNotificationSound } from '@/services/audioService';
 
 // Configure notification behavior
 Notifications.setNotificationHandler({
@@ -64,7 +66,8 @@ export const registerForPushNotifications = async (): Promise<string | null> => 
             name: 'default',
             importance: Notifications.AndroidImportance.MAX,
             vibrationPattern: [0, 250, 250, 250],
-            lightColor: '#00ACC1',
+            lightColor:
+                '#00ACC1',
         });
     }
 
@@ -102,10 +105,33 @@ export const sendLocalNotification = async (
     });
 };
 
+// Show banner notification for foreground notifications
+export const showBannerNotification = (notificationData: NotificationData) => {
+    const { showBanner } = useBannerStore.getState();
+
+    // Determine banner type based on notification type
+    let bannerType: 'success' | 'info' | 'warning' | 'error' = 'info';
+    if (notificationData.type === 'proposal_accepted' || notificationData.type === 'booking_completed') {
+        bannerType = 'success';
+    } else if (notificationData.type === 'proposal_rejected') {
+        bannerType = 'error';
+    }
+
+    showBanner({
+        type: bannerType,
+        title: notificationData.title,
+        message: notificationData.body,
+        duration: 5000, // 5 seconds
+        data: notificationData.data,
+    });
+};
+
 // Trigger notification based on type
 export const triggerNotification = async (notificationData: NotificationData) => {
-    // In production, this would call Firebase Cloud Functions to send push notification
-    // For now, we'll use local notifications for testing
+    // Show banner notification
+    showBannerNotification(notificationData);
+
+    // Send local notification for background/system tray
     await sendLocalNotification(notificationData);
 };
 
@@ -175,4 +201,5 @@ export const notifyChatMessage = (chatId: string, senderName: string, message: s
         data: { chatId },
     });
 };
+
 

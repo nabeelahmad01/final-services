@@ -2,6 +2,7 @@ import { Stack } from 'expo-router';
 import { useEffect } from 'react';
 import { View } from 'react-native';
 import { useAuthStore } from '@/stores/authStore';
+import { useBookingStore } from '@/stores/bookingStore';
 import { subscribeToAuthChanges, getCurrentUser } from '@/services/firebase/authService';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from '@expo-google-fonts/plus-jakarta-sans';
@@ -13,11 +14,15 @@ import {
     PlusJakartaSans_700Bold,
 } from '@expo-google-fonts/plus-jakarta-sans';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
+import { BannerNotification } from '@/components/shared/BannerNotification';
+import { FloatingActiveJobButton } from '@/components/shared/FloatingActiveJobButton';
 import { ModalProvider } from '@/utils/modalService';
+import { initializeAudio } from '@/services/audioService';
 import '@/utils/i18n';
 
 export default function RootLayout() {
     const { setUser, setLoading } = useAuthStore();
+    const { loadActiveBooking } = useBookingStore();
 
     // Load custom fonts
     const [fontsLoaded, fontError] = useFonts({
@@ -29,6 +34,12 @@ export default function RootLayout() {
     });
 
     useEffect(() => {
+        // Initialize audio service
+        initializeAudio();
+
+        // Load active booking from storage
+        loadActiveBooking();
+
         // Subscribe to auth state changes
         const unsubscribe = subscribeToAuthChanges(async (firebaseUser) => {
             if (firebaseUser) {
@@ -61,6 +72,8 @@ export default function RootLayout() {
                 <Stack.Screen name="(mechanic)" />
                 <Stack.Screen name="(shared)" />
             </Stack>
+            <BannerNotification />
+            <FloatingActiveJobButton />
         </ModalProvider>
     );
 }

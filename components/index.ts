@@ -11,3 +11,6 @@ export { LoadingSpinner } from './shared/LoadingSpinner';
 export { SkeletonLoader, SkeletonCard, SkeletonList } from './shared/SkeletonLoader';
 export { EmptyState } from './shared/EmptyState';
 export { ErrorState } from './shared/ErrorState';
+export { BannerNotification } from './shared/BannerNotification';
+export { ActiveJobCard } from './shared/ActiveJobCard';
+export { FloatingActiveJobButton } from './shared/FloatingActiveJobButton';
