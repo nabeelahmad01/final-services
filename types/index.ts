@@ -26,6 +26,7 @@ export interface Mechanic extends User {
     totalRatings: number;
     completedJobs: number;
     diamondBalance: number;
+    totalEarnings: number;
     isVerified: boolean;
     kycStatus: 'pending' | 'approved' | 'rejected';
     kycDocuments?: {

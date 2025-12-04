@@ -6,6 +6,7 @@ import {
     ScrollView,
     TouchableOpacity,
     RefreshControl,
+    Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -21,6 +22,8 @@ import {
     subscribeToActiveBooking,
     createProposal,
     updateMechanicDiamonds,
+    getMechanicReviews,
+    Review,
 } from '@/services/firebase/firestore';
 import { notifyNewProposal } from '@/services/firebase/notifications';
 import { COLORS, SIZES, CATEGORIES } from '@/constants/theme';
@@ -29,6 +32,7 @@ import { useModal, showSuccessModal, showErrorModal } from '@/utils/modalService
 import { startLocationTracking } from '@/services/location/locationTrackingService';
 import { calculateDistance } from '@/services/location/locationService';
 import { ServiceRequestModal } from '@/components/shared/ServiceRequestModal';
+import { ServiceRequestCard } from '@/components/mechanic/ServiceRequestCard';
 
 export default function MechanicDashboard() {
     const router = useRouter();
@@ -38,17 +42,18 @@ export default function MechanicDashboard() {
     const [refreshing, setRefreshing] = useState(false);
     const [activeBooking, setActiveBooking] = useState<any>(null);
     const [serviceRequests, setServiceRequests] = useState<ServiceRequest[]>([]);
-    const [cancelledRequests, setCancelledRequests] = useState<Set<string>>(new Set());
+    const [selectedRequest, setSelectedRequest] = useState<ServiceRequest | null>(null);
     const [submitting, setSubmitting] = useState(false);
-
-    // Get first request that hasn't been cancelled
-    const currentRequest = serviceRequests.find(r => !cancelledRequests.has(r.id)) || null;
+    const [reviews, setReviews] = useState<Review[]>([]);
 
     useEffect(() => {
         if (!user) return;
 
         // Fetch mechanic details
         getMechanic(user.id).then(setMechanic);
+
+        // Fetch reviews
+        getMechanicReviews(user.id, 5).then(setReviews);
 
         // Subscribe to active booking
         const unsubscribeBooking = subscribeToActiveBooking(user.id, 'mechanic', (booking) => {
@@ -92,8 +97,12 @@ export default function MechanicDashboard() {
         setRefreshing(false);
     };
 
+    const handleSelectRequest = (request: ServiceRequest) => {
+        setSelectedRequest(request);
+    };
+
     const handleSubmitProposal = async (price: string, time: string, message: string) => {
-        if (!user || !currentRequest || !mechanic) return;
+        if (!user || !selectedRequest || !mechanic) return;
 
         setSubmitting(true);
         try {
@@ -102,19 +111,19 @@ export default function MechanicDashboard() {
 
             // Calculate actual distance if both have locations
             let actualDistance = 2.5; // Default
-            if (mechanic.location && currentRequest.location) {
+            if (mechanic.location && selectedRequest.location) {
                 actualDistance = calculateDistance(
                     mechanic.location.latitude,
                     mechanic.location.longitude,
-                    currentRequest.location.latitude,
-                    currentRequest.location.longitude
+                    selectedRequest.location.latitude,
+                    selectedRequest.location.longitude
                 );
             }
 
             // Create proposal object
             const proposalData: any = {
-                requestId: currentRequest.id,
-                customerId: currentRequest.customerId,
+                requestId: selectedRequest.id,
+                customerId: selectedRequest.customerId,
                 mechanicId: user.id,
                 mechanicName: user.name,
                 mechanicRating: mechanic.rating,
@@ -141,8 +150,8 @@ export default function MechanicDashboard() {
                 console.log('❌ Failed to notify customer:', error);
             }
 
-            // Mark this request as handled (cancelled) so it doesn't show again
-            setCancelledRequests(prev => new Set(prev).add(currentRequest.id));
+            // Close modal
+            setSelectedRequest(null);
 
             showSuccessModal(showModal, 'Success', 'Proposal submitted!');
         } catch (error: any) {
@@ -152,11 +161,8 @@ export default function MechanicDashboard() {
         }
     };
 
-    const handleCancelRequest = () => {
-        if (!currentRequest) return;
-
-        // Mark as cancelled so it doesn't show again
-        setCancelledRequests(prev => new Set(prev).add(currentRequest.id));
+    const handleCancelModal = () => {
+        setSelectedRequest(null);
     };
 
     // Show loading spinner while fetching mechanic data
@@ -242,11 +248,100 @@ export default function MechanicDashboard() {
                     </Card>
 
                     <Card style={styles.statCard}>
-                        <Ionicons name="diamond" size={32} color={COLORS.primary} />
-                        <Text style={styles.statValue}>{mechanic.diamondBalance}</Text>
-                        <Text style={styles.statLabel}>Diamonds</Text>
+                        <Ionicons name="cash" size={32} color={COLORS.success} />
+                        <Text style={styles.statValue}>{(mechanic.totalEarnings || 0).toLocaleString()}</Text>
+                        <Text style={styles.statLabel}>PKR Earned</Text>
                     </Card>
                 </View>
+
+                {/* Diamond Balance Card */}
+                <Card style={styles.earningsCard}>
+                    <View style={styles.earningsContent}>
+                        <View style={styles.earningsLeft}>
+                            <View style={styles.diamondIconBg}>
+                                <Ionicons name="diamond" size={28} color={COLORS.primary} />
+                            </View>
+                            <View>
+                                <Text style={styles.earningsLabel}>Diamond Balance</Text>
+                                <Text style={styles.earningsValue}>{mechanic.diamondBalance} Diamonds</Text>
+                            </View>
+                        </View>
+                        <TouchableOpacity
+                            style={styles.buyButton}
+                            onPress={() => router.push('/(mechanic)/wallet')}
+                        >
+                            <Ionicons name="add" size={18} color={COLORS.white} />
+                            <Text style={styles.buyButtonText}>Buy</Text>
+                        </TouchableOpacity>
+                    </View>
+                </Card>
+
+                {/* Recent Reviews Section */}
+                {reviews.length > 0 && (
+                    <View style={styles.section}>
+                        <View style={styles.sectionHeader}>
+                            <Text style={styles.sectionTitle}>Recent Reviews</Text>
+                            <TouchableOpacity onPress={() => router.push('/(mechanic)/reviews')}>
+                                <Text style={styles.seeAllText}>See All</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        {reviews.map((review) => (
+                            <Card key={review.id} style={styles.reviewCard}>
+                                <View style={styles.reviewHeader}>
+                                    <View style={styles.reviewerInfo}>
+                                        {review.customerPhoto ? (
+                                            <Image source={{ uri: review.customerPhoto }} style={styles.reviewerPhoto} />
+                                        ) : (
+                                            <View style={[styles.reviewerPhoto, styles.reviewerPhotoPlaceholder]}>
+                                                <Ionicons name="person" size={16} color={COLORS.textSecondary} />
+                                            </View>
+                                        )}
+                                        <View>
+                                            <Text style={styles.reviewerName}>{review.customerName}</Text>
+                                            <View style={styles.reviewStars}>
+                                                {[1, 2, 3, 4, 5].map((star) => (
+                                                    <Ionicons
+                                                        key={star}
+                                                        name={star <= review.rating ? "star" : "star-outline"}
+                                                        size={14}
+                                                        color={COLORS.warning}
+                                                    />
+                                                ))}
+                                            </View>
+                                        </View>
+                                    </View>
+                                    <Text style={styles.reviewDate}>
+                                        {review.createdAt.toLocaleDateString()}
+                                    </Text>
+                                </View>
+                                {review.comment && (
+                                    <Text style={styles.reviewComment}>{review.comment}</Text>
+                                )}
+                            </Card>
+                        ))}
+                    </View>
+                )}
+
+                {/* Service Requests - Show all available requests */}
+                {serviceRequests.length > 0 && (
+                    <View style={styles.section}>
+                        <View style={styles.sectionHeader}>
+                            <Text style={styles.sectionTitle}>Live Service Requests</Text>
+                            <View style={styles.requestCountBadge}>
+                                <Text style={styles.requestCountText}>{serviceRequests.length}</Text>
+                            </View>
+                        </View>
+
+                        {serviceRequests.map((request) => (
+                            <ServiceRequestCard
+                                key={request.id}
+                                request={request}
+                                onAccept={() => handleSelectRequest(request)}
+                            />
+                        ))}
+                    </View>
+                )}
 
                 {/* Quick Actions */}
                 <View style={styles.section}>
@@ -284,11 +379,11 @@ export default function MechanicDashboard() {
                 </View>
             </ScrollView>
 
-            {/* Service Request Modal - Auto-shows when new request arrives */}
+            {/* Service Request Modal - Shows when mechanic selects a request */}
             <ServiceRequestModal
-                request={currentRequest}
+                request={selectedRequest}
                 onSubmitProposal={handleSubmitProposal}
-                onCancel={handleCancelRequest}
+                onCancel={handleCancelModal}
             />
         </SafeAreaView>
     );
@@ -395,11 +490,169 @@ const styles = StyleSheet.create({
     section: {
         marginBottom: 24,
     },
+    sectionHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 16,
+    },
     sectionTitle: {
         fontSize: 20,
         fontWeight: 'bold',
         color: COLORS.text,
-        marginBottom: 16,
+    },
+    seeAllText: {
+        fontSize: SIZES.sm,
+        color: COLORS.primary,
+        fontWeight: '600',
+    },
+    earningsCard: {
+        marginBottom: 24,
+        padding: 16,
+    },
+    earningsContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    earningsLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    diamondIconBg: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: COLORS.primary + '15',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    earningsLabel: {
+        fontSize: SIZES.sm,
+        color: COLORS.textSecondary,
+    },
+    earningsValue: {
+        fontSize: SIZES.lg,
+        fontWeight: 'bold',
+        color: COLORS.text,
+    },
+    buyButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: COLORS.primary,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderRadius: 20,
+    },
+    buyButtonText: {
+        fontSize: SIZES.sm,
+        fontWeight: 'bold',
+        color: COLORS.white,
+    },
+    reviewCard: {
+        marginBottom: 12,
+        padding: 14,
+    },
+    reviewHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+    },
+    reviewerInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
+    reviewerPhoto: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+    },
+    reviewerPhotoPlaceholder: {
+        backgroundColor: COLORS.border,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    reviewerName: {
+        fontSize: SIZES.base,
+        fontWeight: '600',
+        color: COLORS.text,
+    },
+    reviewStars: {
+        flexDirection: 'row',
+        gap: 2,
+        marginTop: 2,
+    },
+    reviewDate: {
+        fontSize: SIZES.xs,
+        color: COLORS.textSecondary,
+    },
+    reviewComment: {
+        fontSize: SIZES.sm,
+        color: COLORS.text,
+        marginTop: 10,
+        lineHeight: 20,
+    },
+    requestCountBadge: {
+        backgroundColor: COLORS.primary,
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+        borderRadius: 12,
+    },
+    requestCountText: {
+        fontSize: SIZES.sm,
+        fontWeight: 'bold',
+        color: COLORS.white,
+    },
+    requestCard: {
+        backgroundColor: COLORS.surface,
+        borderRadius: 12,
+        padding: 14,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        marginBottom: 10,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    requestIcon: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    requestContent: {
+        flex: 1,
+    },
+    requestTitle: {
+        fontSize: SIZES.base,
+        fontWeight: '600',
+        color: COLORS.text,
+    },
+    requestCustomer: {
+        fontSize: SIZES.sm,
+        color: COLORS.textSecondary,
+        marginTop: 2,
+    },
+    requestDescription: {
+        fontSize: SIZES.xs,
+        color: COLORS.textSecondary,
+        marginTop: 4,
+    },
+    requestRight: {
+        alignItems: 'flex-end',
+        gap: 4,
+    },
+    requestPrice: {
+        fontSize: SIZES.base,
+        fontWeight: 'bold',
+        color: COLORS.primary,
     },
     actionCard: {
         backgroundColor: COLORS.surface,
@@ -434,7 +687,7 @@ const styles = StyleSheet.create({
         color: COLORS.textSecondary,
         marginTop: 2,
     },
-    // Service Request Card Styles
+    // Service Request Card Styles (legacy)
     requestCardDashboard: {
         marginBottom: 12,
         padding: 14,
@@ -457,7 +710,7 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: COLORS.text,
     },
-    requestCustomer: {
+    requestCustomerLegacy: {
         fontSize: SIZES.sm,
         color: COLORS.textSecondary,
         marginTop: 2,
@@ -473,7 +726,7 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         color: COLORS.primary,
     },
-    requestDescription: {
+    requestDescriptionLegacy: {
         fontSize: SIZES.sm,
         color: COLORS.text,
         lineHeight: 20,

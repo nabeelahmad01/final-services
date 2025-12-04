@@ -436,6 +436,35 @@ export const markMessagesAsRead = async (chatId: string, userId: string) => {
     await Promise.all(batch);
 };
 
+// Reviews
+export interface Review {
+    id: string;
+    mechanicId: string;
+    customerId: string;
+    customerName: string;
+    customerPhoto?: string;
+    bookingId: string;
+    rating: number;
+    comment: string;
+    createdAt: Date;
+}
+
+export const getMechanicReviews = async (mechanicId: string, limitCount: number = 5): Promise<Review[]> => {
+    const q = query(
+        collection(firestore, 'reviews'),
+        where('mechanicId', '==', mechanicId),
+        orderBy('createdAt', 'desc'),
+        limit(limitCount)
+    );
+
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate() || new Date(),
+    })) as Review[];
+};
+
 // Notifications
 export const createNotification = async (notification: Omit<Notification, 'id' | 'createdAt'>) => {
     const docRef = await addDoc(collection(firestore, 'notifications'), {

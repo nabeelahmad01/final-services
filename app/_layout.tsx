@@ -4,8 +4,11 @@ import { View } from 'react-native';
 import { useAuthStore } from '@/stores/authStore';
 import { useBookingStore } from '@/stores/bookingStore';
 import { useCallStore } from '@/stores/useCallStore';
+import { useServiceRequestStore } from '@/stores/useServiceRequestStore';
 import { subscribeToAuthChanges, getCurrentUser } from '@/services/firebase/authService';
-import { subscribeToIncomingCalls, CallSession } from '@/services/firebase/firestore';
+import { subscribeToIncomingCalls, CallSession, subscribeToServiceRequests, createProposal, updateMechanicDiamonds, getMechanic } from '@/services/firebase/firestore';
+import { notifyNewProposal } from '@/services/firebase/notifications';
+import { calculateDistance } from '@/services/location/locationService';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from '@expo-google-fonts/plus-jakarta-sans';
 import {
@@ -19,7 +22,9 @@ import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { BannerNotification } from '@/components/shared/BannerNotification';
 import { FloatingActiveJobButton } from '@/components/shared/FloatingActiveJobButton';
 import { IncomingCallScreen } from '@/components/shared/IncomingCallScreen';
-import { ModalProvider } from '@/utils/modalService';
+import { FloatingServiceRequest } from '@/components/mechanic/FloatingServiceRequest';
+import { ServiceRequestModal } from '@/components/shared/ServiceRequestModal';
+import { ModalProvider, showSuccessModal, showErrorModal } from '@/utils/modalService';
 import { initializeAudio } from '@/services/audioService';
 import '@/utils/i18n';
 
@@ -28,6 +33,8 @@ export default function RootLayout() {
     const { user, setUser, setLoading } = useAuthStore();
     const { loadActiveBooking } = useBookingStore();
     const { incomingCall, setIncomingCall, clearCalls, isInCall } = useCallStore();
+    const { pendingRequests, setPendingRequests, selectedRequest, selectRequest, dismissRequest, showProposalModal, setShowProposalModal } = useServiceRequestStore();
+    const [submitting, setSubmitting] = useState(false);
 
     // Load custom fonts
     const [fontsLoaded, fontError] = useFonts({
@@ -77,6 +84,19 @@ export default function RootLayout() {
             unsubscribe();
         };
     }, [user?.id, isInCall]);
+
+    // Subscribe to service requests for mechanics
+    useEffect(() => {
+        if (!user?.id || user.role !== 'mechanic') return;
+
+        console.log('🔧 Subscribing to service requests for mechanic:', user.id);
+
+        const unsubscribe = subscribeToServiceRequests('car_mechanic', (requests) => {
+            setPendingRequests(requests);
+        });
+
+        return () => unsubscribe();
+    }, [user?.id, user?.role]);
 
     // Subscribe to notifications and show banners for new ones
     useEffect(() => {
@@ -141,6 +161,70 @@ export default function RootLayout() {
         setIncomingCall(null);
     };
 
+    // Handle floating service request accept
+    const handleAcceptServiceRequest = (request: any) => {
+        selectRequest(request);
+    };
+
+    // Handle proposal submission from modal
+    const handleSubmitProposal = async (price: string, time: string, message: string) => {
+        if (!user || !selectedRequest) return;
+
+        setSubmitting(true);
+        try {
+            const mechanic = await getMechanic(user.id);
+            if (!mechanic) throw new Error('Mechanic not found');
+
+            // Deduct diamond
+            await updateMechanicDiamonds(user.id, 1, 'subtract');
+
+            // Calculate distance
+            let distance = 2.5;
+            if (mechanic.location && selectedRequest.location) {
+                distance = calculateDistance(
+                    mechanic.location.latitude,
+                    mechanic.location.longitude,
+                    selectedRequest.location.latitude,
+                    selectedRequest.location.longitude
+                );
+            }
+
+            // Create proposal
+            const proposalData: any = {
+                requestId: selectedRequest.id,
+                customerId: selectedRequest.customerId,
+                mechanicId: user.id,
+                mechanicName: user.name,
+                mechanicRating: mechanic.rating,
+                mechanicTotalRatings: mechanic.totalRatings,
+                price: parseInt(price),
+                estimatedTime: time,
+                message: message,
+                distance: distance,
+                status: 'pending',
+            };
+
+            if (user.profilePic) {
+                proposalData.mechanicPhoto = user.profilePic;
+            }
+
+            const proposalId = await createProposal(proposalData);
+
+            // Notify customer
+            await notifyNewProposal(proposalId, user.name, parseInt(price));
+
+            // Close modal and dismiss request
+            selectRequest(null);
+            dismissRequest(selectedRequest.id);
+
+            console.log('✅ Proposal submitted!');
+        } catch (error: any) {
+            console.error('Error submitting proposal:', error);
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
     // Show loading screen while fonts are loading
     if (!fontsLoaded && !fontError) {
         return (
@@ -162,6 +246,22 @@ export default function RootLayout() {
             </Stack>
             <BannerNotification />
             <FloatingActiveJobButton />
+
+            {/* Floating Service Request for Mechanics */}
+            {user?.role === 'mechanic' && pendingRequests.length > 0 && !showProposalModal && (
+                <FloatingServiceRequest
+                    requests={pendingRequests}
+                    onAccept={handleAcceptServiceRequest}
+                    onCancel={dismissRequest}
+                />
+            )}
+
+            {/* Service Request Modal for Proposal */}
+            <ServiceRequestModal
+                request={selectedRequest}
+                onSubmitProposal={handleSubmitProposal}
+                onCancel={() => selectRequest(null)}
+            />
 
             {/* Incoming Call Screen */}
             {incomingCall && incomingCall.status === 'ringing' && !isInCall && (

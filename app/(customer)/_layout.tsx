@@ -108,6 +108,12 @@ export default function CustomerLayout() {
                     href: null,
                 }}
             />
+            <Tabs.Screen
+                name="rate-mechanic"
+                options={{
+                    href: null,
+                }}
+            />
         </Tabs>
     );
 }
