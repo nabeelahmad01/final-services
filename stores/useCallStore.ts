@@ -9,6 +9,7 @@ export interface CallSession {
     receiverName: string;
     receiverPhoto?: string;
     callType: 'voice' | 'video';
+    channelName?: string; // Agora channel name for VoIP
     status: 'ringing' | 'accepted' | 'declined' | 'ended' | 'missed';
     createdAt: Date;
 }

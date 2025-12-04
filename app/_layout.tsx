@@ -151,6 +151,7 @@ export default function RootLayout() {
                     callType: incomingCall.callType,
                     isIncoming: 'true',
                     callId: incomingCall.id,
+                    channelName: incomingCall.channelName || '', // Agora channel for VoIP
                 },
             });
             setIncomingCall(null);

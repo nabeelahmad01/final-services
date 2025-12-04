@@ -47,7 +47,7 @@ export default function ChatScreen() {
     const [inputText, setInputText] = useState('');
     const [loading, setLoading] = useState(true);
     const [isFocused, setIsFocused] = useState(false);
-    const [otherUser, setOtherUser] = useState<{ name: string; photo?: string } | null>(null);
+    const [otherUser, setOtherUser] = useState<{ id?: string; name: string; phone?: string; photo?: string } | null>(null);
     const flatListRef = useRef<FlatList>(null);
     const sendButtonScale = useRef(new Animated.Value(1)).current;
 
@@ -61,8 +61,15 @@ export default function ChatScreen() {
                     const data = chatDoc.data();
                     const participants = data.participants || [];
                     const otherUserId = participants.find((p: string) => p !== user?.id);
-                    if (otherUserId && data.participantDetails?.[otherUserId]) {
-                        setOtherUser(data.participantDetails[otherUserId]);
+                    if (otherUserId) {
+                        // Get participant details from chat doc or fetch from users
+                        const details = data.participantDetails?.[otherUserId] || {};
+                        setOtherUser({
+                            id: otherUserId,
+                            name: details.name || 'User',
+                            phone: details.phone,
+                            photo: details.photo,
+                        });
                     }
                 }
             } catch (error) {
@@ -133,9 +140,10 @@ export default function ChatScreen() {
         router.push({
             pathname: '/(shared)/call',
             params: {
-                userId: 'other-user-id', // TODO: Get from chat participants
+                userId: otherUser?.id || 'other-user-id',
                 userName: otherUser?.name || 'User',
                 userPhoto: otherUser?.photo || '',
+                userPhone: otherUser?.phone || '',
                 callType: 'voice'
             },
         });
@@ -145,9 +153,10 @@ export default function ChatScreen() {
         router.push({
             pathname: '/(shared)/call',
             params: {
-                userId: 'other-user-id',
+                userId: otherUser?.id || 'other-user-id',
                 userName: otherUser?.name || 'User',
                 userPhoto: otherUser?.photo || '',
+                userPhone: otherUser?.phone || '',
                 callType: 'video'
             },
         });

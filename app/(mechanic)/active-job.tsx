@@ -209,6 +209,7 @@ export default function ActiveJob() {
                                 params: {
                                     userId: activeBooking.customerId,
                                     userName: activeBooking.customerName,
+                                    userPhone: activeBooking.customerPhone || '',
                                     callType: 'voice'
                                 },
                             });

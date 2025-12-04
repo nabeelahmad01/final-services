@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
     View,
     Text,
@@ -6,6 +6,8 @@ import {
     TouchableOpacity,
     Animated,
     Dimensions,
+    Linking,
+    Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -24,6 +26,19 @@ import {
 
 const { width, height } = Dimensions.get('window');
 
+// Agora functions - loaded dynamically to avoid crash in Expo Go
+let agoraService: any = null;
+const getAgoraService = () => {
+    if (agoraService) return agoraService;
+    try {
+        agoraService = require('@/services/agora/callService');
+        return agoraService;
+    } catch (error) {
+        console.warn('Agora service not available');
+        return null;
+    }
+};
+
 export default function CallScreen() {
     const router = useRouter();
     const params = useLocalSearchParams();
@@ -33,6 +48,7 @@ export default function CallScreen() {
     const userId = params.userId as string;
     const userName = (params.userName as string) || 'User';
     const userPhoto = params.userPhoto as string | undefined;
+    const userPhone = params.userPhone as string | undefined;
     const callType = (params.callType as 'voice' | 'video') || 'voice';
     const isIncoming = params.isIncoming === 'true';
     const callId = params.callId as string;
@@ -41,16 +57,101 @@ export default function CallScreen() {
     const [isSpeaker, setIsSpeaker] = useState(false);
     const [duration, setDuration] = useState(0);
     const [isConnecting, setIsConnecting] = useState(!isIncoming);
-    const [isConnected, setIsConnected] = useState(isIncoming);
+    const [isConnected, setIsConnected] = useState(false);
     const [currentCallId, setCurrentCallId] = useState<string | null>(callId || null);
+    const [remoteUserJoined, setRemoteUserJoined] = useState(false);
+    const [agoraReady, setAgoraReady] = useState(false);
 
-    const pulseAnim = React.useRef(new Animated.Value(1)).current;
+    const pulseAnim = useRef(new Animated.Value(1)).current;
+    const channelNameRef = useRef<string>('');
 
-    // Create call session for outgoing calls
+    // Initialize Agora and setup call
     useEffect(() => {
-        if (!isIncoming && user && userId) {
+        const setupAgora = async () => {
+            try {
+                console.log('🎙️ Initializing call...');
+                const agora = getAgoraService();
+
+                if (!agora) {
+                    console.warn('⚠️ Running in Expo Go - simulated call mode');
+                    // Simulate connection for Expo Go
+                    setTimeout(() => {
+                        setAgoraReady(true);
+                        setIsConnecting(false);
+                        setIsConnected(true);
+                    }, 2000);
+                    return;
+                }
+
+                const engine = await agora.initializeAgoraEngine();
+
+                if (!engine) {
+                    // Simulated mode for Expo Go
+                    setTimeout(() => {
+                        setAgoraReady(true);
+                        setIsConnecting(false);
+                        setIsConnected(true);
+                    }, 2000);
+                    return;
+                }
+
+                // Setup event listeners
+                agora.setupAgoraListeners({
+                    onJoinSuccess: (channel: string, uid: number) => {
+                        console.log('✅ Successfully joined channel:', channel);
+                        setAgoraReady(true);
+                    },
+                    onUserJoined: (uid: number) => {
+                        console.log('👤 Remote user joined:', uid);
+                        setRemoteUserJoined(true);
+                        setIsConnecting(false);
+                        setIsConnected(true);
+                    },
+                    onUserOffline: (uid: number, reason: number) => {
+                        console.log('👋 Remote user left:', uid);
+                        setRemoteUserJoined(false);
+                        if (reason !== 2) {
+                            handleEndCall();
+                        }
+                    },
+                    onError: (errorCode: number, message: string) => {
+                        console.error('❌ Agora error:', errorCode, message);
+                    },
+                });
+
+                setAgoraReady(true);
+            } catch (error) {
+                console.error('Failed to setup call:', error);
+                // Fallback to simulated mode
+                setTimeout(() => {
+                    setAgoraReady(true);
+                    setIsConnecting(false);
+                    setIsConnected(true);
+                }, 2000);
+            }
+        };
+
+        setupAgora();
+
+        return () => {
+            const agora = getAgoraService();
+            if (agora) {
+                agora.leaveCall?.();
+                agora.destroyAgoraEngine?.();
+            }
+        };
+    }, []);
+
+    // Create call session and join channel for outgoing calls
+    useEffect(() => {
+        if (!isIncoming && user && userId && agoraReady) {
             const createCall = async () => {
                 try {
+                    const agora = getAgoraService();
+                    const channelName = agora?.generateChannelName?.(user.id, userId) || `call_${Date.now()}`;
+                    channelNameRef.current = channelName;
+
+                    // Create call session in Firebase
                     const newCallId = await createCallSession({
                         callerId: user.id,
                         callerName: user.name,
@@ -59,16 +160,54 @@ export default function CallScreen() {
                         receiverName: userName,
                         receiverPhoto: userPhoto,
                         callType,
+                        channelName,
                     });
                     setCurrentCallId(newCallId);
+
+                    // Join Agora channel
+                    if (agora) {
+                        const uid = agora.generateUid?.(user.id) || 0;
+                        await agora.joinVoiceCall?.(channelName, uid);
+                    }
+
                     console.log('📞 Call session created:', newCallId);
                 } catch (error) {
-                    console.error('Error creating call session:', error);
+                    console.error('Error creating call:', error);
+                    Alert.alert('Error', 'Could not start call. Please try again.');
                 }
             };
             createCall();
         }
-    }, []);
+    }, [agoraReady, isIncoming, user, userId]);
+
+    // For incoming calls, join the channel
+    useEffect(() => {
+        if (isIncoming && user && agoraReady && callId) {
+            const joinCall = async () => {
+                try {
+                    const agora = getAgoraService();
+                    const channelName = params.channelName as string ||
+                        agora?.generateChannelName?.(userId, user.id) ||
+                        `call_${Date.now()}`;
+                    channelNameRef.current = channelName;
+
+                    if (agora) {
+                        const uid = agora.generateUid?.(user.id) || 0;
+                        await agora.joinVoiceCall?.(channelName, uid);
+                    }
+
+                    await updateCallStatus(callId, 'accepted');
+
+                    console.log('📞 Joined incoming call:', channelName);
+                    setIsConnected(true);
+                    setIsConnecting(false);
+                } catch (error) {
+                    console.error('Error joining call:', error);
+                }
+            };
+            joinCall();
+        }
+    }, [isIncoming, agoraReady, callId, user]);
 
     // Listen to call status updates
     useEffect(() => {
@@ -138,8 +277,25 @@ export default function CallScreen() {
         return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
 
+    const handleToggleMute = async () => {
+        const newMuted = !isMuted;
+        setIsMuted(newMuted);
+        const agora = getAgoraService();
+        await agora?.toggleMute?.(newMuted);
+    };
+
+    const handleToggleSpeaker = async () => {
+        const newSpeaker = !isSpeaker;
+        setIsSpeaker(newSpeaker);
+        const agora = getAgoraService();
+        await agora?.toggleSpeaker?.(newSpeaker);
+    };
+
     const handleEndCall = async () => {
         try {
+            const agora = getAgoraService();
+            await agora?.leaveCall?.();
+
             if (currentCallId) {
                 await endCallSession(currentCallId);
             }
@@ -147,13 +303,28 @@ export default function CallScreen() {
             console.error('Error ending call:', error);
         } finally {
             endCall();
-            // Use replace to navigate away - prevents GO_BACK error
             if (router.canGoBack()) {
                 router.back();
             } else {
-                // Navigate to appropriate home screen based on user type
                 router.replace('/(customer)/home');
             }
+        }
+    };
+
+    // Make native phone call fallback
+    const makeNativeCall = async () => {
+        if (!userPhone) {
+            Alert.alert('Error', 'Phone number not available');
+            return;
+        }
+
+        const phoneUrl = `tel:${userPhone}`;
+        const supported = await Linking.canOpenURL(phoneUrl);
+
+        if (supported) {
+            await Linking.openURL(phoneUrl);
+        } else {
+            Alert.alert('Error', 'Cannot make phone calls from this device');
         }
     };
 
@@ -172,6 +343,12 @@ export default function CallScreen() {
                     <Text style={styles.callTypeText}>
                         {callType === 'voice' ? '🎙️ Voice Call' : '📹 Video Call'}
                     </Text>
+                    {isConnected && (
+                        <View style={styles.connectedIndicator}>
+                            <View style={styles.liveIndicator} />
+                            <Text style={styles.connectedText}>Connected</Text>
+                        </View>
+                    )}
                 </View>
 
                 {/* User Info */}
@@ -198,7 +375,7 @@ export default function CallScreen() {
                 <View style={styles.controls}>
                     <TouchableOpacity
                         style={[styles.controlButton, isSpeaker && styles.controlButtonActive]}
-                        onPress={() => setIsSpeaker(!isSpeaker)}
+                        onPress={handleToggleSpeaker}
                     >
                         <Ionicons
                             name={isSpeaker ? 'volume-high' : 'volume-low-outline'}
@@ -210,7 +387,7 @@ export default function CallScreen() {
 
                     <TouchableOpacity
                         style={[styles.controlButton, isMuted && styles.controlButtonActive]}
-                        onPress={() => setIsMuted(!isMuted)}
+                        onPress={handleToggleMute}
                     >
                         <Ionicons
                             name={isMuted ? 'mic-off' : 'mic'}
@@ -231,6 +408,17 @@ export default function CallScreen() {
                         <Ionicons name="chatbubble-ellipses" size={26} color={COLORS.white} />
                         <Text style={styles.controlLabel}>Chat</Text>
                     </TouchableOpacity>
+
+                    {/* Native Phone Call Button */}
+                    {userPhone && (
+                        <TouchableOpacity
+                            style={[styles.controlButton, styles.phoneButton]}
+                            onPress={makeNativeCall}
+                        >
+                            <Ionicons name="call" size={26} color={COLORS.success} />
+                            <Text style={[styles.controlLabel, { color: COLORS.success }]}>Phone</Text>
+                        </TouchableOpacity>
+                    )}
                 </View>
 
                 {/* End Call Button */}
@@ -279,6 +467,7 @@ const styles = StyleSheet.create({
     },
     header: {
         alignItems: 'center',
+        gap: 8,
     },
     callTypeText: {
         fontSize: SIZES.base,
@@ -286,6 +475,26 @@ const styles = StyleSheet.create({
         color: COLORS.white + 'AA',
         textTransform: 'uppercase',
         letterSpacing: 1.5,
+    },
+    connectedIndicator: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: COLORS.success + '30',
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+        borderRadius: 12,
+    },
+    liveIndicator: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: COLORS.success,
+    },
+    connectedText: {
+        fontSize: SIZES.xs,
+        fontFamily: FONTS.medium,
+        color: COLORS.success,
     },
     userInfo: {
         alignItems: 'center',
@@ -340,6 +549,11 @@ const styles = StyleSheet.create({
         fontSize: SIZES.xs,
         fontFamily: FONTS.medium,
         color: COLORS.white + 'CC',
+    },
+    phoneButton: {
+        backgroundColor: COLORS.success + '20',
+        borderWidth: 1,
+        borderColor: COLORS.success + '40',
     },
     endCallButton: {
         alignItems: 'center',

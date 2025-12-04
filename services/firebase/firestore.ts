@@ -574,6 +574,7 @@ export interface CallSession {
     receiverName: string;
     receiverPhoto?: string;
     callType: 'voice' | 'video';
+    channelName?: string; // Agora channel name for VoIP
     status: 'ringing' | 'accepted' | 'declined' | 'ended' | 'missed';
     createdAt: Date;
 }
@@ -592,12 +593,15 @@ export const createCallSession = async (
         createdAt: Timestamp.now(),
     };
 
-    // Only add photo fields if they exist
+    // Only add optional fields if they exist
     if (callData.callerPhoto) {
         cleanedData.callerPhoto = callData.callerPhoto;
     }
     if (callData.receiverPhoto) {
         cleanedData.receiverPhoto = callData.receiverPhoto;
+    }
+    if (callData.channelName) {
+        cleanedData.channelName = callData.channelName;
     }
 
     const docRef = await addDoc(collection(firestore, 'calls'), cleanedData);
