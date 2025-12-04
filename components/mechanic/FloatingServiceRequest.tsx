@@ -190,7 +190,7 @@ export const FloatingServiceRequest: React.FC<FloatingServiceRequestProps> = ({
 const styles = StyleSheet.create({
     container: {
         position: 'absolute',
-        top: 80,
+        top: 140,
         left: 12,
         right: 12,
         zIndex: 9999,

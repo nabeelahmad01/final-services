@@ -18,21 +18,15 @@ import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { useAuthStore } from '@/stores/authStore';
 import {
     getMechanic,
-    subscribeToServiceRequests,
     subscribeToActiveBooking,
-    createProposal,
-    updateMechanicDiamonds,
     getMechanicReviews,
+    getCompletedBookings,
     Review,
 } from '@/services/firebase/firestore';
-import { notifyNewProposal } from '@/services/firebase/notifications';
 import { COLORS, SIZES, CATEGORIES } from '@/constants/theme';
-import { Mechanic, ServiceRequest } from '@/types';
-import { useModal, showSuccessModal, showErrorModal } from '@/utils/modalService';
+import { Mechanic, Booking } from '@/types';
+import { useModal } from '@/utils/modalService';
 import { startLocationTracking } from '@/services/location/locationTrackingService';
-import { calculateDistance } from '@/services/location/locationService';
-import { ServiceRequestModal } from '@/components/shared/ServiceRequestModal';
-import { ServiceRequestCard } from '@/components/mechanic/ServiceRequestCard';
 
 export default function MechanicDashboard() {
     const router = useRouter();
@@ -41,10 +35,8 @@ export default function MechanicDashboard() {
     const [mechanic, setMechanic] = useState<Mechanic | null>(null);
     const [refreshing, setRefreshing] = useState(false);
     const [activeBooking, setActiveBooking] = useState<any>(null);
-    const [serviceRequests, setServiceRequests] = useState<ServiceRequest[]>([]);
-    const [selectedRequest, setSelectedRequest] = useState<ServiceRequest | null>(null);
-    const [submitting, setSubmitting] = useState(false);
     const [reviews, setReviews] = useState<Review[]>([]);
+    const [completedJobs, setCompletedJobs] = useState<Booking[]>([]);
 
     useEffect(() => {
         if (!user) return;
@@ -55,6 +47,9 @@ export default function MechanicDashboard() {
         // Fetch reviews
         getMechanicReviews(user.id, 5).then(setReviews);
 
+        // Fetch completed jobs
+        getCompletedBookings(user.id, 5).then(setCompletedJobs);
+
         // Subscribe to active booking
         const unsubscribeBooking = subscribeToActiveBooking(user.id, 'mechanic', (booking) => {
             setActiveBooking(booking);
@@ -63,12 +58,8 @@ export default function MechanicDashboard() {
             }
         });
 
-        // Subscribe to service requests
-        const unsubscribeRequests = subscribeToServiceRequests('car_mechanic', setServiceRequests);
-
         return () => {
             unsubscribeBooking();
-            unsubscribeRequests();
         };
     }, [user]);
 
@@ -95,74 +86,6 @@ export default function MechanicDashboard() {
             await getMechanic(user.id).then(setMechanic);
         }
         setRefreshing(false);
-    };
-
-    const handleSelectRequest = (request: ServiceRequest) => {
-        setSelectedRequest(request);
-    };
-
-    const handleSubmitProposal = async (price: string, time: string, message: string) => {
-        if (!user || !selectedRequest || !mechanic) return;
-
-        setSubmitting(true);
-        try {
-            // Deduct diamond
-            await updateMechanicDiamonds(user.id, 1, 'subtract');
-
-            // Calculate actual distance if both have locations
-            let actualDistance = 2.5; // Default
-            if (mechanic.location && selectedRequest.location) {
-                actualDistance = calculateDistance(
-                    mechanic.location.latitude,
-                    mechanic.location.longitude,
-                    selectedRequest.location.latitude,
-                    selectedRequest.location.longitude
-                );
-            }
-
-            // Create proposal object
-            const proposalData: any = {
-                requestId: selectedRequest.id,
-                customerId: selectedRequest.customerId,
-                mechanicId: user.id,
-                mechanicName: user.name,
-                mechanicRating: mechanic.rating,
-                mechanicTotalRatings: mechanic.totalRatings,
-                price: parseInt(price),
-                estimatedTime: time,
-                message: message,
-                distance: actualDistance,
-                status: 'pending',
-            };
-
-            // Only add mechanicPhoto if it exists
-            if (user.profilePic) {
-                proposalData.mechanicPhoto = user.profilePic;
-            }
-
-            const proposalId = await createProposal(proposalData);
-
-            // 🚀 Notify customer about new proposal
-            try {
-                await notifyNewProposal(proposalId, user.name, parseInt(price));
-                console.log('✅ Customer notified of new proposal');
-            } catch (error) {
-                console.log('❌ Failed to notify customer:', error);
-            }
-
-            // Close modal
-            setSelectedRequest(null);
-
-            showSuccessModal(showModal, 'Success', 'Proposal submitted!');
-        } catch (error: any) {
-            showErrorModal(showModal, 'Error', error.message);
-        } finally {
-            setSubmitting(false);
-        }
-    };
-
-    const handleCancelModal = () => {
-        setSelectedRequest(null);
     };
 
     // Show loading spinner while fetching mechanic data
@@ -323,23 +246,42 @@ export default function MechanicDashboard() {
                     </View>
                 )}
 
-                {/* Service Requests - Show all available requests */}
-                {serviceRequests.length > 0 && (
+                {/* Job History - Show completed jobs */}
+                {completedJobs.length > 0 && (
                     <View style={styles.section}>
                         <View style={styles.sectionHeader}>
-                            <Text style={styles.sectionTitle}>Live Service Requests</Text>
-                            <View style={styles.requestCountBadge}>
-                                <Text style={styles.requestCountText}>{serviceRequests.length}</Text>
-                            </View>
+                            <Text style={styles.sectionTitle}>Recent Jobs</Text>
+                            <TouchableOpacity onPress={() => router.push('/(mechanic)/history')}>
+                                <Text style={styles.seeAllText}>See All</Text>
+                            </TouchableOpacity>
                         </View>
 
-                        {serviceRequests.map((request) => (
-                            <ServiceRequestCard
-                                key={request.id}
-                                request={request}
-                                onAccept={() => handleSelectRequest(request)}
-                            />
-                        ))}
+                        {completedJobs.map((job) => {
+                            const category = CATEGORIES.find((c) => c.id === job.category);
+                            return (
+                                <Card key={job.id} style={styles.jobHistoryCard}>
+                                    <View style={styles.jobHistoryHeader}>
+                                        <View style={[styles.jobCategoryIcon, { backgroundColor: (category?.color || COLORS.primary) + '20' }]}>
+                                            <Ionicons name={category?.icon as any || 'construct'} size={24} color={category?.color || COLORS.primary} />
+                                        </View>
+                                        <View style={styles.jobHistoryInfo}>
+                                            <Text style={styles.jobHistoryTitle}>{category?.name || 'Service'}</Text>
+                                            <Text style={styles.jobHistoryCustomer}>{job.customerName}</Text>
+                                        </View>
+                                        <View style={styles.jobHistoryRight}>
+                                            <Text style={styles.jobHistoryPrice}>PKR {job.price?.toLocaleString() || 0}</Text>
+                                            <Text style={styles.jobHistoryDate}>
+                                                {job.completedAt?.toLocaleDateString() || 'Completed'}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                    <View style={styles.jobHistoryStatus}>
+                                        <Ionicons name="checkmark-circle" size={16} color={COLORS.success} />
+                                        <Text style={styles.jobHistoryStatusText}>Completed</Text>
+                                    </View>
+                                </Card>
+                            );
+                        })}
                     </View>
                 )}
 
@@ -378,13 +320,6 @@ export default function MechanicDashboard() {
                     </TouchableOpacity>
                 </View>
             </ScrollView>
-
-            {/* Service Request Modal - Shows when mechanic selects a request */}
-            <ServiceRequestModal
-                request={selectedRequest}
-                onSubmitProposal={handleSubmitProposal}
-                onCancel={handleCancelModal}
-            />
         </SafeAreaView>
     );
 }
@@ -550,6 +485,62 @@ const styles = StyleSheet.create({
         fontSize: SIZES.sm,
         fontWeight: 'bold',
         color: COLORS.white,
+    },
+    jobHistoryCard: {
+        marginBottom: 12,
+        padding: 14,
+    },
+    jobHistoryHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    jobCategoryIcon: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    jobHistoryInfo: {
+        flex: 1,
+    },
+    jobHistoryTitle: {
+        fontSize: SIZES.base,
+        fontWeight: '600',
+        color: COLORS.text,
+    },
+    jobHistoryCustomer: {
+        fontSize: SIZES.sm,
+        color: COLORS.textSecondary,
+        marginTop: 2,
+    },
+    jobHistoryRight: {
+        alignItems: 'flex-end',
+    },
+    jobHistoryPrice: {
+        fontSize: SIZES.base,
+        fontWeight: 'bold',
+        color: COLORS.success,
+    },
+    jobHistoryDate: {
+        fontSize: SIZES.xs,
+        color: COLORS.textSecondary,
+        marginTop: 2,
+    },
+    jobHistoryStatus: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        marginTop: 10,
+        paddingTop: 10,
+        borderTopWidth: 1,
+        borderTopColor: COLORS.border,
+    },
+    jobHistoryStatusText: {
+        fontSize: SIZES.sm,
+        color: COLORS.success,
+        fontWeight: '500',
     },
     reviewCard: {
         marginBottom: 12,

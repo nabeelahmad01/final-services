@@ -205,6 +205,28 @@ export const updateBooking = async (id: string, updates: Partial<Booking>) => {
     await updateDoc(doc(firestore, 'bookings', id), updateData);
 };
 
+// Get completed bookings for a mechanic
+export const getCompletedBookings = async (mechanicId: string, limitCount: number = 5): Promise<Booking[]> => {
+    const q = query(
+        collection(firestore, 'bookings'),
+        where('mechanicId', '==', mechanicId),
+        where('status', '==', 'completed'),
+        orderBy('completedAt', 'desc'),
+        limit(limitCount)
+    );
+
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+            id: doc.id,
+            ...data,
+            startedAt: data.startedAt?.toDate() || new Date(),
+            completedAt: data.completedAt?.toDate() || new Date(),
+        } as Booking;
+    });
+};
+
 // Mechanics
 export const getMechanic = async (id: string): Promise<Mechanic | null> => {
     const docSnap = await getDoc(doc(firestore, 'mechanics', id));
