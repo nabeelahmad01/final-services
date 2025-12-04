@@ -13,19 +13,22 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { COLORS, SIZES } from '@/constants/theme';
 import { useAuthStore } from '@/stores/authStore';
+import { updateUserProfile } from '@/services/firebase/firestore';
+import { uploadProfilePic } from '@/services/firebase/storage';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useModal, showErrorModal, showSuccessModal } from '@/utils/modalService';
 
 export default function EditProfile() {
     const router = useRouter();
-    const { user } = useAuthStore();
+    const { user, setUser } = useAuthStore();
     const { showModal } = useModal();
     const [loading, setLoading] = useState(false);
 
     const [name, setName] = useState(user?.name || '');
     const [phone, setPhone] = useState(user?.phone || '');
     const [profilePic, setProfilePic] = useState(user?.profilePic || null);
+    const [newImageSelected, setNewImageSelected] = useState(false);
 
     const selectImage = async () => {
         const result = await ImagePicker.launchImageLibraryAsync({
@@ -37,6 +40,7 @@ export default function EditProfile() {
 
         if (!result.canceled) {
             setProfilePic(result.assets[0].uri);
+            setNewImageSelected(true);
         }
     };
 
@@ -46,20 +50,44 @@ export default function EditProfile() {
             return;
         }
 
+        if (!user) return;
+
         setLoading(true);
 
         try {
-            // TODO: Upload profile pic to Firebase Storage if changed
-            // TODO: Update user document in Firestore
+            let finalProfilePic = user.profilePic;
+
+            // Upload new profile pic if changed
+            if (newImageSelected && profilePic) {
+                try {
+                    finalProfilePic = await uploadProfilePic(user.id, profilePic);
+                } catch (uploadError) {
+                    console.log('Profile pic upload failed, continuing without it');
+                }
+            }
+
+            // Update in Firestore
+            await updateUserProfile(user.id, {
+                name: name.trim(),
+                ...(finalProfilePic && { profilePic: finalProfilePic }),
+            });
+
+            // Update local auth store
+            setUser({
+                ...user,
+                name: name.trim(),
+                profilePic: finalProfilePic || user.profilePic,
+            });
 
             showSuccessModal(
                 showModal,
                 'Success',
                 'Profile updated successfully',
-                () => router.push('/(shared)/profile')
+                () => router.back()
             );
         } catch (error: any) {
-            showErrorModal(showModal, 'Error', error.message);
+            console.error('Error updating profile:', error);
+            showErrorModal(showModal, 'Error', error.message || 'Failed to update profile');
         } finally {
             setLoading(false);
         }

@@ -488,3 +488,152 @@ export const markAllNotificationsAsRead = async (userId: string) => {
     await Promise.all(batch);
 };
 
+// User Profile
+export const updateUserProfile = async (
+    userId: string,
+    updates: { name?: string; profilePic?: string }
+) => {
+    // Update in users collection
+    await updateDoc(doc(firestore, 'users', userId), {
+        ...updates,
+        updatedAt: Timestamp.now(),
+    });
+
+    // Also update in mechanics collection if exists
+    try {
+        const mechanicDoc = await getDoc(doc(firestore, 'mechanics', userId));
+        if (mechanicDoc.exists()) {
+            await updateDoc(doc(firestore, 'mechanics', userId), {
+                ...updates,
+                updatedAt: Timestamp.now(),
+            });
+        }
+    } catch (error) {
+        // Mechanic doc doesn't exist, that's ok
+    }
+};
+
+// Call Sessions
+export interface CallSession {
+    id: string;
+    callerId: string;
+    callerName: string;
+    callerPhoto?: string;
+    receiverId: string;
+    receiverName: string;
+    receiverPhoto?: string;
+    callType: 'voice' | 'video';
+    status: 'ringing' | 'accepted' | 'declined' | 'ended' | 'missed';
+    createdAt: Date;
+}
+
+export const createCallSession = async (
+    callData: Omit<CallSession, 'id' | 'createdAt' | 'status'>
+): Promise<string> => {
+    // Remove undefined fields - Firebase doesn't accept undefined values
+    const cleanedData: Record<string, any> = {
+        callerId: callData.callerId,
+        callerName: callData.callerName,
+        receiverId: callData.receiverId,
+        receiverName: callData.receiverName,
+        callType: callData.callType,
+        status: 'ringing',
+        createdAt: Timestamp.now(),
+    };
+
+    // Only add photo fields if they exist
+    if (callData.callerPhoto) {
+        cleanedData.callerPhoto = callData.callerPhoto;
+    }
+    if (callData.receiverPhoto) {
+        cleanedData.receiverPhoto = callData.receiverPhoto;
+    }
+
+    const docRef = await addDoc(collection(firestore, 'calls'), cleanedData);
+    return docRef.id;
+};
+
+export const subscribeToIncomingCalls = (
+    userId: string,
+    callback: (call: CallSession | null) => void
+) => {
+    // Simplified query - no orderBy to avoid index requirement
+    const q = query(
+        collection(firestore, 'calls'),
+        where('receiverId', '==', userId),
+        where('status', '==', 'ringing')
+    );
+
+    return onSnapshot(q, (snapshot) => {
+        console.log('📞 Incoming calls snapshot:', snapshot.docs.length, 'calls found for', userId);
+
+        if (snapshot.empty) {
+            callback(null);
+            return;
+        }
+
+        // Get the most recent one (manually sort by createdAt)
+        const docs = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            createdAt: doc.data().createdAt?.toDate() || new Date(),
+        })) as CallSession[];
+
+        docs.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+        console.log('📞 Incoming call detected:', docs[0]);
+        callback(docs[0]);
+    }, (error) => {
+        console.error('📞 Error subscribing to incoming calls:', error);
+        callback(null);
+    });
+};
+
+export const updateCallStatus = async (
+    callId: string,
+    status: CallSession['status']
+) => {
+    await updateDoc(doc(firestore, 'calls', callId), {
+        status,
+        updatedAt: Timestamp.now()
+    });
+};
+
+export const getCallSession = async (callId: string): Promise<CallSession | null> => {
+    const docSnap = await getDoc(doc(firestore, 'calls', callId));
+    if (!docSnap.exists()) return null;
+
+    const data = docSnap.data();
+    return {
+        id: docSnap.id,
+        ...data,
+        createdAt: data.createdAt.toDate(),
+    } as CallSession;
+};
+
+export const subscribeToCallSession = (
+    callId: string,
+    callback: (call: CallSession | null) => void
+) => {
+    return onSnapshot(doc(firestore, 'calls', callId), (snapshot) => {
+        if (!snapshot.exists()) {
+            callback(null);
+            return;
+        }
+
+        const data = snapshot.data();
+        callback({
+            id: snapshot.id,
+            ...data,
+            createdAt: data.createdAt.toDate(),
+        } as CallSession);
+    });
+};
+
+export const endCallSession = async (callId: string) => {
+    await updateDoc(doc(firestore, 'calls', callId), {
+        status: 'ended',
+        endedAt: Timestamp.now()
+    });
+};
+

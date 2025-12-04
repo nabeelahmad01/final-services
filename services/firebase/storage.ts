@@ -68,3 +68,14 @@ export const uploadImage = async (uri: string, path: string): Promise<string> =>
         throw new Error(`Failed to upload image: ${error.code || error.message}`);
     }
 };
+
+/**
+ * Uploads a profile picture for a user
+ * @param userId The user's ID
+ * @param uri The local URI of the image
+ * @returns The download URL of the uploaded profile picture
+ */
+export const uploadProfilePic = async (userId: string, uri: string): Promise<string> => {
+    const path = `profilePics/${userId}_${Date.now()}.jpg`;
+    return uploadImage(uri, path);
+};

@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/shared/Avatar';
 import { COLORS, SIZES, CATEGORIES } from '@/constants/theme';
 import { ServiceRequest } from '@/types';
-import { playNotificationSound } from '@/services/firebase/notifications';
+import { playNotificationSound } from '@/services/audioService';
 
 const { width } = Dimensions.get('window');
 

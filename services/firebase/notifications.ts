@@ -167,23 +167,22 @@ export const notifyNewProposal = async (proposalId: string, mechanicName: string
         return;
     }
 
-    // Show banner notification locally (for current user if they're the customer)
-    showBannerNotification({
-        type: 'new_proposal',
-        title: '💼 New Proposal Received',
-        body: `${mechanicName} sent a proposal for PKR ${price}`,
-        data: { proposalId },
-    });
+    // NOTE: Don't show local banner here - this runs on MECHANIC's device!
+    // The banner should only show on the CUSTOMER's device
+    // Customer will see notification via Firestore subscription in their app
 
     // Create notification in Firestore for the CUSTOMER
+    // Customer's app will pick this up via subscribeToNotifications
     await createNotification({
         userId: proposal.customerId, // Send to customer, not mechanic!
         type: 'new_proposal',
         title: '💼 New Proposal Received',
         message: `${mechanicName} sent a proposal for PKR ${price}`,
-        data: { proposalId },
+        data: { proposalId, requestId: proposal.requestId },
         read: false
     });
+
+    console.log('✅ Notification created for customer:', proposal.customerId);
 };
 
 export const notifyProposalAccepted = (bookingId: string, customerName: string) => {

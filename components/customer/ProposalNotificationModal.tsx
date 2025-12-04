@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/shared/Avatar';
 import { COLORS } from '@/constants/theme';
 import { Proposal } from '@/types';
-import { playNotificationSound } from '@/services/firebase/notifications';
+import { playNotificationSound } from '@/services/audioService';
 
 const { width } = Dimensions.get('window');
 
