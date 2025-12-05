@@ -35,6 +35,8 @@ export default function LeaveReview() {
                 bookingId || 'test-booking',
                 mechanicId || 'test-mechanic',
                 user?.id || 'anonymous',
+                user?.name || 'Customer',
+                user?.profilePic || undefined,
                 rating,
                 review
             );

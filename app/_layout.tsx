@@ -33,7 +33,7 @@ export default function RootLayout() {
     const { user, setUser, setLoading } = useAuthStore();
     const { loadActiveBooking } = useBookingStore();
     const { incomingCall, setIncomingCall, clearCalls, isInCall } = useCallStore();
-    const { pendingRequests, setPendingRequests, selectedRequest, selectRequest, dismissRequest, showProposalModal, setShowProposalModal } = useServiceRequestStore();
+    const { pendingRequests, setPendingRequests, selectedRequest, selectRequest, dismissRequest, markAsResponded, showProposalModal, setShowProposalModal } = useServiceRequestStore();
     const [submitting, setSubmitting] = useState(false);
 
     // Load custom fonts
@@ -214,9 +214,8 @@ export default function RootLayout() {
             // Notify customer
             await notifyNewProposal(proposalId, user.name, parseInt(price));
 
-            // Close modal and dismiss request
-            selectRequest(null);
-            dismissRequest(selectedRequest.id);
+            // Close modal and mark request as responded (won't show again)
+            markAsResponded(selectedRequest.id);
 
             console.log('✅ Proposal submitted!');
         } catch (error: any) {

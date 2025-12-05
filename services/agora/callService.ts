@@ -5,15 +5,23 @@
  * Expo Go does not support native modules like react-native-agora
  */
 
-import { Platform, PermissionsAndroid, Alert } from 'react-native';
+import { Platform, PermissionsAndroid } from 'react-native';
+import {
+    ChannelProfileType,
+    ClientRoleType,
+    IRtcEngine,
+    RtcConnection,
+    IRtcEngineEventHandler,
+    createAgoraRtcEngine,
+} from 'react-native-agora';
 
 // Agora App ID from environment
 const AGORA_APP_ID = process.env.EXPO_PUBLIC_AGORA_APP_ID || '';
 
 // Agora engine instance
-let agoraEngine: any = null;
-let agoraAvailable: boolean | null = null;
-let agoraChecked = false;
+let agoraEngine: IRtcEngine | null = null;
+let isInitialized = false;
+let eventHandler: IRtcEngineEventHandler | null = null;
 
 export interface CallConfig {
     userId: string;
@@ -48,46 +56,49 @@ const requestMicrophonePermission = async (): Promise<boolean> => {
 
 /**
  * Check if Agora is available (not in Expo Go)
- * MUST be called before any other Agora function
  */
 export const isAgoraAvailable = (): boolean => {
-    // Already checked
-    if (agoraChecked) return agoraAvailable === true;
-    agoraChecked = true;
-
-    // Don't even try in Expo Go - check expo-constants
     try {
+        // Check if running in Expo Go
         const Constants = require('expo-constants').default;
         if (Constants.appOwnership === 'expo') {
             console.log('⚠️ Running in Expo Go - Agora not available');
-            agoraAvailable = false;
             return false;
         }
     } catch (e) {
-        // expo-constants not available, continue
+        // expo-constants not available, might be a bare workflow
     }
 
-    // In development build, try to load Agora
-    agoraAvailable = false; // Default to false for safety
-    console.log('📱 Development build detected - Agora may be available');
-    return false; // Return false for now, will be set true on actual init
+    // Check if createAgoraRtcEngine is available
+    try {
+        if (typeof createAgoraRtcEngine === 'function') {
+            return true;
+        }
+    } catch (e) {
+        console.log('⚠️ Agora SDK not available');
+    }
+
+    return false;
 };
 
 /**
  * Initialize Agora RTC Engine
  */
-export const initializeAgoraEngine = async (): Promise<any> => {
-    // Quick check for Expo Go
-    isAgoraAvailable();
-
-    if (agoraAvailable === false) {
-        console.warn('⚠️ Agora not available - using simulated calls');
-        return null;
+export const initializeAgoraEngine = async (): Promise<IRtcEngine | null> => {
+    if (isInitialized && agoraEngine) {
+        console.log('✅ Agora engine already initialized');
+        return agoraEngine;
     }
 
     try {
         if (!AGORA_APP_ID) {
             console.error('❌ Agora App ID not configured!');
+            return null;
+        }
+
+        // Check if Agora is available
+        if (!isAgoraAvailable()) {
+            console.warn('⚠️ Agora not available - using simulated calls');
             return null;
         }
 
@@ -98,35 +109,31 @@ export const initializeAgoraEngine = async (): Promise<any> => {
             return null;
         }
 
-        // Try to dynamically require Agora
-        let createAgoraRtcEngine;
-        try {
-            const agoraSdk = require('react-native-agora');
-            createAgoraRtcEngine = agoraSdk.default || agoraSdk.createAgoraRtcEngine;
-        } catch (error) {
-            console.warn('⚠️ react-native-agora not available:', error);
-            agoraAvailable = false;
-            return null;
-        }
-
         // Create the engine
         agoraEngine = createAgoraRtcEngine();
 
         // Initialize the engine
         agoraEngine.initialize({
             appId: AGORA_APP_ID,
-            channelProfile: 0,
+            channelProfile: ChannelProfileType.ChannelProfileCommunication,
         });
 
-        // Enable audio
+        // Enable audio with proper settings
         agoraEngine.enableAudio();
+        agoraEngine.setAudioProfile(0, 3); // Default profile, Gaming scenario for low latency
+        agoraEngine.adjustRecordingSignalVolume(100);
+        agoraEngine.adjustPlaybackSignalVolume(100);
+        agoraEngine.setEnableSpeakerphone(false); // Start with earpiece
 
-        agoraAvailable = true;
+        isInitialized = true;
         console.log('✅ Agora Engine initialized successfully');
+        console.log('📱 App ID:', AGORA_APP_ID.substring(0, 8) + '...');
+
         return agoraEngine;
     } catch (error) {
         console.error('❌ Failed to initialize Agora:', error);
-        agoraAvailable = false;
+        isInitialized = false;
+        agoraEngine = null;
         return null;
     }
 };
@@ -134,103 +141,11 @@ export const initializeAgoraEngine = async (): Promise<any> => {
 /**
  * Get or create Agora engine
  */
-export const getAgoraEngine = async (): Promise<any> => {
-    if (agoraEngine) {
+export const getAgoraEngine = async (): Promise<IRtcEngine | null> => {
+    if (agoraEngine && isInitialized) {
         return agoraEngine;
     }
     return await initializeAgoraEngine();
-};
-
-/**
- * Join a voice call channel
- */
-export const joinVoiceCall = async (
-    channelName: string,
-    uid: number = 0,
-    token?: string
-): Promise<boolean> => {
-    try {
-        const engine = await getAgoraEngine();
-        if (!engine) {
-            console.warn('⚠️ Agora engine not available - simulating call');
-            return true;
-        }
-
-        engine.setClientRole?.(1);
-        engine.joinChannel?.(token || '', channelName, uid, {
-            autoSubscribeAudio: true,
-            publishMicrophoneTrack: true,
-        });
-
-        console.log(`✅ Joining voice call: ${channelName}`);
-        return true;
-    } catch (error) {
-        console.error('❌ Failed to join call:', error);
-        return false;
-    }
-};
-
-/**
- * Leave current call
- */
-export const leaveCall = async (): Promise<void> => {
-    try {
-        if (agoraEngine) {
-            agoraEngine.leaveChannel?.();
-            console.log('✅ Left call successfully');
-        }
-    } catch (error) {
-        console.error('❌ Failed to leave call:', error);
-    }
-};
-
-/**
- * Mute/unmute local audio
- */
-export const toggleMute = async (muted: boolean): Promise<void> => {
-    try {
-        if (agoraEngine) {
-            agoraEngine.muteLocalAudioStream?.(muted);
-        }
-        console.log(`🎤 Audio ${muted ? 'muted' : 'unmuted'}`);
-    } catch (error) {
-        console.error('❌ Failed to toggle mute:', error);
-    }
-};
-
-/**
- * Toggle speakerphone
- */
-export const toggleSpeaker = async (enabled: boolean): Promise<void> => {
-    try {
-        if (agoraEngine) {
-            agoraEngine.setEnableSpeakerphone?.(enabled);
-        }
-        console.log(`🔊 Speaker ${enabled ? 'enabled' : 'disabled'}`);
-    } catch (error) {
-        console.error('❌ Failed to toggle speaker:', error);
-    }
-};
-
-/**
- * Generate unique channel name for a call
- */
-export const generateChannelName = (userId1: string, userId2: string): string => {
-    const sorted = [userId1, userId2].sort();
-    return `call_${sorted[0]}_${sorted[1]}_${Date.now()}`;
-};
-
-/**
- * Generate numeric UID from user ID string
- */
-export const generateUid = (userId: string): number => {
-    let hash = 0;
-    for (let i = 0; i < userId.length; i++) {
-        const char = userId.charCodeAt(i);
-        hash = ((hash << 5) - hash) + char;
-        hash = hash & hash;
-    }
-    return Math.abs(hash);
 };
 
 /**
@@ -251,30 +166,147 @@ export const setupAgoraListeners = (callbacks: {
     }
 
     try {
-        const eventHandler = {
-            onJoinChannelSuccess: (connection: any, elapsed: number) => {
-                console.log(`✅ Joined channel: ${connection?.channelId}`);
-                callbacks.onJoinSuccess?.(connection?.channelId || '', connection?.localUid || 0);
+        // Unregister previous handler if exists
+        if (eventHandler) {
+            agoraEngine.unregisterEventHandler(eventHandler);
+        }
+
+        eventHandler = {
+            onJoinChannelSuccess: (connection: RtcConnection, elapsed: number) => {
+                console.log(`✅ Joined channel: ${connection.channelId}, uid: ${connection.localUid}`);
+                callbacks.onJoinSuccess?.(connection.channelId || '', connection.localUid || 0);
             },
-            onUserJoined: (connection: any, remoteUid: number) => {
+            onUserJoined: (connection: RtcConnection, remoteUid: number, elapsed: number) => {
                 console.log(`👤 Remote user joined: ${remoteUid}`);
                 callbacks.onUserJoined?.(remoteUid);
             },
-            onUserOffline: (connection: any, remoteUid: number, reason: number) => {
-                console.log(`👋 Remote user left: ${remoteUid}`);
+            onUserOffline: (connection: RtcConnection, remoteUid: number, reason: number) => {
+                console.log(`👋 Remote user left: ${remoteUid}, reason: ${reason}`);
                 callbacks.onUserOffline?.(remoteUid, reason);
             },
             onError: (err: number, msg: string) => {
                 console.error(`❌ Agora error [${err}]: ${msg}`);
                 callbacks.onError?.(err, msg);
             },
+            onConnectionStateChanged: (connection: RtcConnection, state: number, reason: number) => {
+                console.log(`🔌 Connection state: ${state}, reason: ${reason}`);
+            },
+            onAudioRoutingChanged: (routing: number) => {
+                console.log(`🔊 Audio routing changed to: ${routing}`);
+            },
         };
 
-        agoraEngine.registerEventHandler?.(eventHandler);
+        agoraEngine.registerEventHandler(eventHandler);
         console.log('✅ Agora event listeners registered');
     } catch (error) {
         console.warn('⚠️ Failed to register Agora listeners:', error);
     }
+};
+
+/**
+ * Join a voice call channel
+ */
+export const joinVoiceCall = async (
+    channelName: string,
+    uid: number = 0,
+    token?: string
+): Promise<boolean> => {
+    try {
+        const engine = await getAgoraEngine();
+        if (!engine) {
+            console.warn('⚠️ Agora engine not available - simulating call');
+            return true; // Return true for simulated mode
+        }
+
+        // Set client role to broadcaster (can send and receive audio)
+        engine.setClientRole(ClientRoleType.ClientRoleBroadcaster);
+
+        // Enable audio before joining
+        engine.enableAudio();
+        engine.muteLocalAudioStream(false);
+
+        // Join the channel with proper options
+        const result = engine.joinChannel(
+            token || '', // Token (empty for testing)
+            channelName,
+            uid,
+            {
+                autoSubscribeAudio: true,
+                publishMicrophoneTrack: true,
+                clientRoleType: ClientRoleType.ClientRoleBroadcaster,
+            }
+        );
+
+        console.log(`✅ Joining voice call: ${channelName}, uid: ${uid}, result: ${result}`);
+        return true;
+    } catch (error) {
+        console.error('❌ Failed to join call:', error);
+        return false;
+    }
+};
+
+/**
+ * Leave current call
+ */
+export const leaveCall = async (): Promise<void> => {
+    try {
+        if (agoraEngine) {
+            agoraEngine.leaveChannel();
+            console.log('✅ Left call successfully');
+        }
+    } catch (error) {
+        console.error('❌ Failed to leave call:', error);
+    }
+};
+
+/**
+ * Mute/unmute local audio
+ */
+export const toggleMute = async (muted: boolean): Promise<void> => {
+    try {
+        if (agoraEngine) {
+            agoraEngine.muteLocalAudioStream(muted);
+            console.log(`🎤 Audio ${muted ? 'muted' : 'unmuted'}`);
+        }
+    } catch (error) {
+        console.error('❌ Failed to toggle mute:', error);
+    }
+};
+
+/**
+ * Toggle speakerphone
+ */
+export const toggleSpeaker = async (enabled: boolean): Promise<void> => {
+    try {
+        if (agoraEngine) {
+            agoraEngine.setEnableSpeakerphone(enabled);
+            console.log(`🔊 Speaker ${enabled ? 'enabled' : 'disabled'}`);
+        }
+    } catch (error) {
+        console.error('❌ Failed to toggle speaker:', error);
+    }
+};
+
+/**
+ * Generate unique channel name for a call
+ */
+export const generateChannelName = (userId1: string, userId2: string): string => {
+    const sorted = [userId1, userId2].sort();
+    return `fixkar_${sorted[0].slice(-6)}_${sorted[1].slice(-6)}_${Date.now()}`;
+};
+
+/**
+ * Generate numeric UID from user ID string
+ */
+export const generateUid = (userId: string): number => {
+    let hash = 0;
+    for (let i = 0; i < userId.length; i++) {
+        const char = userId.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash;
+    }
+    // Ensure positive number within valid range (1 to 2^32-1)
+    return Math.abs(hash % 2147483647) + 1;
 };
 
 /**
@@ -283,9 +315,14 @@ export const setupAgoraListeners = (callbacks: {
 export const destroyAgoraEngine = (): void => {
     try {
         if (agoraEngine) {
-            agoraEngine.leaveChannel?.();
-            agoraEngine.release?.();
+            if (eventHandler) {
+                agoraEngine.unregisterEventHandler(eventHandler);
+                eventHandler = null;
+            }
+            agoraEngine.leaveChannel();
+            agoraEngine.release();
             agoraEngine = null;
+            isInitialized = false;
             console.log('🧹 Agora engine destroyed');
         }
     } catch (error) {

@@ -31,10 +31,17 @@ let agoraService: any = null;
 const getAgoraService = () => {
     if (agoraService) return agoraService;
     try {
-        agoraService = require('@/services/agora/callService');
-        return agoraService;
+        const service = require('@/services/agora/callService').default;
+        // Check if Agora is actually available
+        if (service && service.isAgoraAvailable && service.isAgoraAvailable()) {
+            agoraService = service;
+            return agoraService;
+        } else {
+            console.warn('⚠️ Agora SDK not available on this device');
+            return null;
+        }
     } catch (error) {
-        console.warn('Agora service not available');
+        console.warn('Agora service not available:', error);
         return null;
     }
 };

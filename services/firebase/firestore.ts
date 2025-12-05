@@ -53,10 +53,15 @@ export const subscribeToServiceRequests = (
     category: ServiceCategory,
     callback: (requests: ServiceRequest[]) => void
 ) => {
+    // Only get requests from last 10 minutes (live requests only)
+    const tenMinutesAgo = new Date();
+    tenMinutesAgo.setMinutes(tenMinutesAgo.getMinutes() - 10);
+
     const q = query(
         collection(firestore, 'serviceRequests'),
         where('category', '==', category),
         where('status', '==', 'pending'),
+        where('createdAt', '>=', tenMinutesAgo),
         orderBy('createdAt', 'desc')
     );
 

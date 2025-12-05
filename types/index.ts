@@ -24,6 +24,8 @@ export interface Mechanic extends User {
     categories: ServiceCategory[];
     rating: number;
     totalRatings: number;
+    ratingCount?: number; // Number of ratings received
+    totalRating?: number; // Sum of all ratings (for calculating average)
     completedJobs: number;
     diamondBalance: number;
     totalEarnings: number;
@@ -111,6 +113,8 @@ export interface Booking {
     completedAt?: Date;
     rating?: number;
     review?: string;
+    isReviewed?: boolean;
+    reviewComment?: string;
     beforePhotos?: string[];
     afterPhotos?: string[];
 }

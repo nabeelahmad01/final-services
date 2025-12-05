@@ -8,7 +8,6 @@ import {
     TouchableOpacity,
     KeyboardAvoidingView,
     Platform,
-    Keyboard,
     Animated,
     Dimensions,
     ActivityIndicator,
@@ -62,7 +61,6 @@ export default function ChatScreen() {
                     const participants = data.participants || [];
                     const otherUserId = participants.find((p: string) => p !== user?.id);
                     if (otherUserId) {
-                        // Get participant details from chat doc or fetch from users
                         const details = data.participantDetails?.[otherUserId] || {};
                         setOtherUser({
                             id: otherUserId,
@@ -90,20 +88,9 @@ export default function ChatScreen() {
         return () => unsubscribe();
     }, [chatId]);
 
-    useEffect(() => {
-        const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', () => {
-            setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-        });
-
-        return () => {
-            keyboardDidShowListener.remove();
-        };
-    }, []);
-
     const handleSend = async () => {
         if (!inputText.trim() || !user) return;
 
-        // Animate send button
         Animated.sequence([
             Animated.timing(sendButtonScale, {
                 toValue: 0.8,
@@ -130,7 +117,6 @@ export default function ChatScreen() {
                     avatar: user.profilePic,
                 },
             });
-            setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
         } catch (error) {
             console.error('Error sending message:', error);
         }
@@ -186,11 +172,12 @@ export default function ChatScreen() {
         });
     };
 
+    // For inverted list - check if date changes between current and next message
     const shouldShowDate = (index: number) => {
-        if (index === 0) return true;
+        if (index === messages.length - 1) return true;
         const currentDate = new Date(messages[index].createdAt).toDateString();
-        const prevDate = new Date(messages[index - 1].createdAt).toDateString();
-        return currentDate !== prevDate;
+        const nextDate = new Date(messages[index + 1].createdAt).toDateString();
+        return currentDate !== nextDate;
     };
 
     const renderMessage = ({ item, index }: { item: Message; index: number }) => {
@@ -253,81 +240,71 @@ export default function ChatScreen() {
     }
 
     return (
-        <SafeAreaView style={styles.container}>
-            {/* Beautiful Header */}
+        <SafeAreaView style={styles.container} >
+            {/* Header */}
             <LinearGradient
                 colors={[COLORS.primary, COLORS.primaryDark]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.headerGradient}
             >
-                <SafeAreaView edges={['top']} style={styles.headerSafeArea}>
-                    <View style={styles.header}>
-                        <TouchableOpacity
-                            onPress={() => router.back()}
-                            style={styles.backButton}
-                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                        >
-                            <Ionicons name="arrow-back" size={24} color={COLORS.white} />
-                        </TouchableOpacity>
+                <View style={styles.header}>
+                    <TouchableOpacity
+                        onPress={() => router.back()}
+                        style={styles.backButton}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                        <Ionicons name="arrow-back" size={24} color={COLORS.white} />
+                    </TouchableOpacity>
 
-                        <TouchableOpacity style={styles.userInfoContainer} activeOpacity={0.8}>
-                            <View style={styles.avatarWrapper}>
-                                <Avatar name={otherUser?.name || 'User'} photo={otherUser?.photo} size={44} />
-                                <View style={styles.onlineIndicator} />
-                            </View>
-                            <View style={styles.headerTextContainer}>
-                                <Text style={styles.headerTitle}>{otherUser?.name || 'Chat'}</Text>
-                                <Text style={styles.headerSubtitle}>Online</Text>
-                            </View>
-                        </TouchableOpacity>
-
-                        <View style={styles.headerActions}>
-                            <TouchableOpacity
-                                onPress={handleVideoCall}
-                                style={styles.headerActionButton}
-                            >
-                                <Ionicons name="videocam" size={22} color={COLORS.white} />
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                onPress={handleCall}
-                                style={styles.headerActionButton}
-                            >
-                                <Ionicons name="call" size={20} color={COLORS.white} />
-                            </TouchableOpacity>
+                    <TouchableOpacity style={styles.userInfoContainer} activeOpacity={0.8}>
+                        <View style={styles.avatarWrapper}>
+                            <Avatar name={otherUser?.name || 'User'} photo={otherUser?.photo} size={44} />
+                            <View style={styles.onlineIndicator} />
                         </View>
+                        <View style={styles.headerTextContainer}>
+                            <Text style={styles.headerTitle}>{otherUser?.name || 'Chat'}</Text>
+                            <Text style={styles.headerSubtitle}>Online</Text>
+                        </View>
+                    </TouchableOpacity>
+
+                    <View style={styles.headerActions}>
+                        <TouchableOpacity onPress={handleVideoCall} style={styles.headerActionButton}>
+                            <Ionicons name="videocam" size={22} color={COLORS.white} />
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={handleCall} style={styles.headerActionButton}>
+                            <Ionicons name="call" size={20} color={COLORS.white} />
+                        </TouchableOpacity>
                     </View>
-                </SafeAreaView>
+                </View>
             </LinearGradient>
 
-            {/* Messages List */}
-            <FlatList
-                ref={flatListRef}
-                data={messages}
-                keyExtractor={(item) => item._id}
-                renderItem={renderMessage}
-                contentContainerStyle={styles.messagesList}
-                onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-                onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
-                showsVerticalScrollIndicator={false}
-                ListEmptyComponent={
-                    <View style={styles.emptyContainer}>
-                        <View style={styles.emptyIconContainer}>
-                            <Ionicons name="chatbubbles-outline" size={48} color={COLORS.primary} />
-                        </View>
-                        <Text style={styles.emptyTitle}>Start a Conversation</Text>
-                        <Text style={styles.emptySubtitle}>
-                            Say hi and start chatting!
-                        </Text>
-                    </View>
-                }
-            />
-
-            {/* Input Area */}
             <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                style={styles.keyboardContainer}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
             >
+                {/* Messages List - Inverted so newest messages at bottom */}
+                <FlatList
+                    ref={flatListRef}
+                    data={messages}
+                    keyExtractor={(item) => item._id}
+                    renderItem={renderMessage}
+                    contentContainerStyle={styles.messagesList}
+                    inverted
+                    showsVerticalScrollIndicator={false}
+                    ListEmptyComponent={
+                        <View style={styles.emptyContainer}>
+                            <View style={styles.emptyIconContainer}>
+                                <Ionicons name="chatbubbles-outline" size={48} color={COLORS.primary} />
+                            </View>
+                            <Text style={styles.emptyTitle}>Start a Conversation</Text>
+                            <Text style={styles.emptySubtitle}>Say hi and start chatting!</Text>
+                        </View>
+                    }
+                />
+
+                {/* Input Area */}
                 <View style={[styles.inputContainer, isFocused && styles.inputContainerFocused]}>
                     <TouchableOpacity style={styles.attachButton}>
                         <View style={styles.attachButtonInner}>
@@ -354,10 +331,7 @@ export default function ChatScreen() {
 
                     <Animated.View style={{ transform: [{ scale: sendButtonScale }] }}>
                         <TouchableOpacity
-                            style={[
-                                styles.sendButton,
-                                !inputText.trim() && styles.sendButtonDisabled
-                            ]}
+                            style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
                             onPress={handleSend}
                             disabled={!inputText.trim()}
                             activeOpacity={0.8}
@@ -369,12 +343,7 @@ export default function ChatScreen() {
                                 }
                                 style={styles.sendButtonGradient}
                             >
-                                <Ionicons
-                                    name="send"
-                                    size={20}
-                                    color={COLORS.white}
-                                    style={{ marginLeft: 2 }}
-                                />
+                                <Ionicons name="send" size={20} color={COLORS.white} style={{ marginLeft: 2 }} />
                             </LinearGradient>
                         </TouchableOpacity>
                     </Animated.View>
@@ -389,6 +358,9 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#F8FAFA',
     },
+    keyboardContainer: {
+        flex: 1,
+    },
     loadingContainer: {
         flex: 1,
         justifyContent: 'center',
@@ -397,9 +369,6 @@ const styles = StyleSheet.create({
     },
     headerGradient: {
         paddingBottom: 12,
-    },
-    headerSafeArea: {
-        width: '100%',
     },
     header: {
         flexDirection: 'row',
@@ -586,7 +555,7 @@ const styles = StyleSheet.create({
         alignItems: 'flex-end',
         paddingHorizontal: 12,
         paddingVertical: 12,
-        paddingBottom: Platform.OS === 'ios' ? 28 : 12,
+        paddingBottom: Platform.OS === 'ios' ? 8 : 12,
         backgroundColor: COLORS.white,
         borderTopWidth: 1,
         borderTopColor: COLORS.border + '50',

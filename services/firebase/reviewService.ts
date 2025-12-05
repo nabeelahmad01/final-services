@@ -19,17 +19,21 @@ export const addReview = async (
     bookingId: string,
     mechanicId: string,
     customerId: string,
+    customerName: string,
+    customerPhoto: string | undefined,
     rating: number,
     comment: string
 ) => {
     try {
         await runTransaction(db, async (transaction) => {
-            // 1. Create the review document
+            // 1. Create the review document with customer info
             const reviewRef = doc(collection(db, 'reviews'));
             transaction.set(reviewRef, {
                 bookingId,
                 mechanicId,
                 customerId,
+                customerName,
+                customerPhoto: customerPhoto || null,
                 rating,
                 comment,
                 createdAt: serverTimestamp(),
@@ -38,17 +42,13 @@ export const addReview = async (
             // 2. Update mechanic's rating stats
             const mechanicRef = doc(db, 'users', mechanicId);
             transaction.update(mechanicRef, {
-                rating: increment(rating), // This is wrong, we need to re-calculate average. 
-                // Firestore doesn't have a simple "update average" operator.
-                // We need to store totalRating and ratingCount.
                 totalRating: increment(rating),
                 ratingCount: increment(1),
             });
 
-            // 3. Update booking status to 'completed' and 'reviewed'
+            // 3. Update booking status to 'reviewed'
             const bookingRef = doc(db, 'bookings', bookingId);
             transaction.update(bookingRef, {
-                status: 'completed',
                 isReviewed: true
             });
         });

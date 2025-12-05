@@ -28,6 +28,29 @@ import { Mechanic, Booking } from '@/types';
 import { useModal } from '@/utils/modalService';
 import { startLocationTracking } from '@/services/location/locationTrackingService';
 
+// Helper function to format time smartly
+const formatTimeAgo = (date: Date): string => {
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays === 1) return 'Yesterday';
+    return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
+};
+
+// Calculate proper average rating
+const calculateRating = (mechanic: Mechanic): number => {
+    if (mechanic.ratingCount && mechanic.ratingCount > 0 && mechanic.totalRating) {
+        return mechanic.totalRating / mechanic.ratingCount;
+    }
+    return mechanic.rating || 0;
+};
+
 export default function MechanicDashboard() {
     const router = useRouter();
     const { user } = useAuthStore();
@@ -83,7 +106,20 @@ export default function MechanicDashboard() {
     const onRefresh = async () => {
         setRefreshing(true);
         if (user) {
-            await getMechanic(user.id).then(setMechanic);
+            try {
+                // Fetch all data in parallel
+                const [mechanicData, reviewsData, jobsData] = await Promise.all([
+                    getMechanic(user.id),
+                    getMechanicReviews(user.id, 5),
+                    getCompletedBookings(user.id, 5),
+                ]);
+
+                setMechanic(mechanicData);
+                setReviews(reviewsData);
+                setCompletedJobs(jobsData);
+            } catch (error) {
+                console.error('Error refreshing dashboard:', error);
+            }
         }
         setRefreshing(false);
     };
@@ -160,7 +196,7 @@ export default function MechanicDashboard() {
                 <View style={styles.statsGrid}>
                     <Card style={styles.statCard}>
                         <Ionicons name="star" size={32} color={COLORS.warning} />
-                        <Text style={styles.statValue}>{mechanic.rating.toFixed(1)}</Text>
+                        <Text style={styles.statValue}>{calculateRating(mechanic).toFixed(1)}</Text>
                         <Text style={styles.statLabel}>Rating</Text>
                     </Card>
 
@@ -235,7 +271,7 @@ export default function MechanicDashboard() {
                                         </View>
                                     </View>
                                     <Text style={styles.reviewDate}>
-                                        {review.createdAt.toLocaleDateString()}
+                                        {formatTimeAgo(review.createdAt)}
                                     </Text>
                                 </View>
                                 {review.comment && (
@@ -271,10 +307,31 @@ export default function MechanicDashboard() {
                                         <View style={styles.jobHistoryRight}>
                                             <Text style={styles.jobHistoryPrice}>PKR {job.price?.toLocaleString() || 0}</Text>
                                             <Text style={styles.jobHistoryDate}>
-                                                {job.completedAt?.toLocaleDateString() || 'Completed'}
+                                                {job.completedAt ? formatTimeAgo(job.completedAt) : 'Completed'}
                                             </Text>
                                         </View>
                                     </View>
+                                    {/* Show review info if available */}
+                                    {job.isReviewed && job.rating !== undefined && (
+                                        <View style={styles.jobReviewSection}>
+                                            <View style={styles.jobReviewStars}>
+                                                {[1, 2, 3, 4, 5].map((star) => (
+                                                    <Ionicons
+                                                        key={star}
+                                                        name={star <= (job.rating || 0) ? 'star' : 'star-outline'}
+                                                        size={14}
+                                                        color={COLORS.warning}
+                                                    />
+                                                ))}
+                                                <Text style={styles.jobReviewRating}>{job.rating}/5</Text>
+                                            </View>
+                                            {job.reviewComment && (
+                                                <Text style={styles.jobReviewComment} numberOfLines={2}>
+                                                    "{job.reviewComment}"
+                                                </Text>
+                                            )}
+                                        </View>
+                                    )}
                                     <View style={styles.jobHistoryStatus}>
                                         <Ionicons name="checkmark-circle" size={16} color={COLORS.success} />
                                         <Text style={styles.jobHistoryStatusText}>Completed</Text>
@@ -541,6 +598,30 @@ const styles = StyleSheet.create({
         fontSize: SIZES.sm,
         color: COLORS.success,
         fontWeight: '500',
+    },
+    jobReviewSection: {
+        marginTop: 10,
+        paddingTop: 10,
+        borderTopWidth: 1,
+        borderTopColor: COLORS.border,
+    },
+    jobReviewStars: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 2,
+    },
+    jobReviewRating: {
+        fontSize: SIZES.sm,
+        color: COLORS.warning,
+        fontWeight: '600',
+        marginLeft: 6,
+    },
+    jobReviewComment: {
+        fontSize: SIZES.sm,
+        color: COLORS.textSecondary,
+        fontStyle: 'italic',
+        marginTop: 4,
+        lineHeight: 18,
     },
     reviewCard: {
         marginBottom: 12,
