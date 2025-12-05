@@ -7,7 +7,7 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "scheme": "servicemarketplace",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -74,9 +74,9 @@
         "origin": false
       },
       "eas": {
-        "projectId": "1b5c2494-b755-40d9-9a8d-4711c76c212e"
+        "projectId": "1a78a643-8b18-45b7-b92e-17a441be2323"
       }
     },
-    "owner": "ahmad634"
+    "owner": "fixkar"
   }
 }
