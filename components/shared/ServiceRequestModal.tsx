@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SIZES, FONTS, CATEGORIES } from '@/constants/theme';
 import { ServiceRequest } from '@/types';
 import { LinearGradient } from 'expo-linear-gradient';
+import { playServiceRequestRingtone, stopServiceRequestRingtone } from '@/services/audioService';
 
 interface ServiceRequestModalProps {
     request: ServiceRequest | null;
@@ -32,6 +33,21 @@ export const ServiceRequestModal: React.FC<ServiceRequestModalProps> = ({
     const [message, setMessage] = useState('I can help you with this!');
     const [timeRemaining, setTimeRemaining] = useState(120); // 2 minutes in seconds
     const pulseAnim = React.useRef(new Animated.Value(1)).current;
+
+    // Play ringtone when modal opens, stop when closed
+    useEffect(() => {
+        if (request) {
+            // Play ringtone
+            playServiceRequestRingtone();
+        } else {
+            // Stop ringtone
+            stopServiceRequestRingtone();
+        }
+
+        return () => {
+            stopServiceRequestRingtone();
+        };
+    }, [!!request]);
 
     // Reset state when new request arrives
     useEffect(() => {

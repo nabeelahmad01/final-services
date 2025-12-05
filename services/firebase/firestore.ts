@@ -549,24 +549,27 @@ export const updateUserProfile = async (
     userId: string,
     updates: { name?: string; profilePic?: string }
 ) => {
-    // Update in users collection
-    await updateDoc(doc(firestore, 'users', userId), {
-        ...updates,
-        updatedAt: Timestamp.now(),
-    });
-
-    // Also update in mechanics collection if exists
-    try {
-        const mechanicDoc = await getDoc(doc(firestore, 'mechanics', userId));
-        if (mechanicDoc.exists()) {
-            await updateDoc(doc(firestore, 'mechanics', userId), {
-                ...updates,
-                updatedAt: Timestamp.now(),
-            });
-        }
-    } catch (error) {
-        // Mechanic doc doesn't exist, that's ok
+    // Try mechanics collection first
+    const mechanicDoc = await getDoc(doc(firestore, 'mechanics', userId));
+    if (mechanicDoc.exists()) {
+        await updateDoc(doc(firestore, 'mechanics', userId), {
+            ...updates,
+            updatedAt: Timestamp.now(),
+        });
+        return;
     }
+
+    // Try customers collection
+    const customerDoc = await getDoc(doc(firestore, 'customers', userId));
+    if (customerDoc.exists()) {
+        await updateDoc(doc(firestore, 'customers', userId), {
+            ...updates,
+            updatedAt: Timestamp.now(),
+        });
+        return;
+    }
+
+    console.error('User not found in mechanics or customers collection');
 };
 
 // Call Sessions

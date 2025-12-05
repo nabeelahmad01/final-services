@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '@/components/shared/Avatar';
 import { COLORS } from '@/constants/theme';
 import { Proposal } from '@/types';
-import { playNotificationSound } from '@/services/audioService';
+import { playProposalNotification } from '@/services/audioService';
 
 const { width } = Dimensions.get('window');
 
@@ -30,7 +30,8 @@ export const ProposalNotificationModal: React.FC<ProposalNotificationModalProps>
 }) => {
     useEffect(() => {
         if (visible && proposal) {
-            playNotificationSound();
+            // Play vibration + sound for customer
+            playProposalNotification();
         }
     }, [visible, proposal]);
 

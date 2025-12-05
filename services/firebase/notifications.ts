@@ -77,12 +77,31 @@ export const registerForPushNotifications = async (): Promise<string | null> => 
 // Save push token to user document in Firestore
 export const savePushTokenToUser = async (userId: string, token: string) => {
     try {
-        const userRef = doc(firestore, 'users', userId);
-        await updateDoc(userRef, {
-            pushToken: token,
-            lastTokenUpdate: new Date(),
-        });
-        console.log('Push token saved for user:', userId);
+        // Try mechanics collection first
+        const { getDoc } = await import('firebase/firestore');
+        const mechanicDoc = await getDoc(doc(firestore, 'mechanics', userId));
+
+        if (mechanicDoc.exists()) {
+            await updateDoc(doc(firestore, 'mechanics', userId), {
+                pushToken: token,
+                lastTokenUpdate: new Date(),
+            });
+            console.log('Push token saved for mechanic:', userId);
+            return;
+        }
+
+        // Try customers collection
+        const customerDoc = await getDoc(doc(firestore, 'customers', userId));
+        if (customerDoc.exists()) {
+            await updateDoc(doc(firestore, 'customers', userId), {
+                pushToken: token,
+                lastTokenUpdate: new Date(),
+            });
+            console.log('Push token saved for customer:', userId);
+            return;
+        }
+
+        console.error('User not found in mechanics or customers collection');
     } catch (error) {
         console.error('Error saving push token:', error);
     }

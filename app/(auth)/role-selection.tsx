@@ -9,10 +9,8 @@ export default function RoleSelection() {
     const router = useRouter();
 
     const handleRoleSelect = (role: 'customer' | 'mechanic') => {
-        router.push({
-            pathname: '/(auth)/signup',
-            params: { role },
-        });
+        // Go to phone login - role is selected in complete-profile
+        router.push('/(auth)/phone-login');
     };
 
     return (

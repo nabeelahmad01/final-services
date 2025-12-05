@@ -85,17 +85,47 @@ export default function RootLayout() {
         };
     }, [user?.id, isInCall]);
 
-    // Subscribe to service requests for mechanics
+    // Subscribe to service requests for mechanics (only if eligible)
     useEffect(() => {
         if (!user?.id || user.role !== 'mechanic') return;
 
-        console.log('🔧 Subscribing to service requests for mechanic:', user.id);
+        // Check if mechanic is eligible to receive requests
+        const checkEligibilityAndSubscribe = async () => {
+            try {
+                const { getMechanic } = require('@/services/firebase/firestore');
+                const mechanic = await getMechanic(user.id);
 
-        const unsubscribe = subscribeToServiceRequests('car_mechanic', (requests) => {
-            setPendingRequests(requests);
+                // Only subscribe if KYC approved
+                // Email verification is optional for now, can be enforced later
+                if (!mechanic || mechanic.kycStatus !== 'approved') {
+                    console.log('⚠️ Mechanic not eligible for requests (KYC not approved)');
+                    return () => { };
+                }
+
+                console.log('🔧 Subscribing to service requests for mechanic:', user.id);
+
+                // Get mechanic's first category or default to car_mechanic
+                const category = mechanic.categories?.[0] || 'car_mechanic';
+
+                const unsubscribe = subscribeToServiceRequests(category, (requests: any[]) => {
+                    setPendingRequests(requests);
+                });
+
+                return unsubscribe;
+            } catch (error) {
+                console.error('Error checking mechanic eligibility:', error);
+                return () => { };
+            }
+        };
+
+        let unsubscribe: (() => void) | undefined;
+        checkEligibilityAndSubscribe().then(unsub => {
+            unsubscribe = unsub;
         });
 
-        return () => unsubscribe();
+        return () => {
+            if (unsubscribe) unsubscribe();
+        };
     }, [user?.id, user?.role]);
 
     // Subscribe to notifications and show banners for new ones

@@ -30,6 +30,7 @@ export interface Mechanic extends User {
     diamondBalance: number;
     totalEarnings: number;
     isVerified: boolean;
+    emailVerified?: boolean; // Email verification status
     kycStatus: 'pending' | 'approved' | 'rejected';
     kycDocuments?: {
         cnic: string;

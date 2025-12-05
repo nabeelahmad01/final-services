@@ -45,9 +45,9 @@ export const processPayment = async (
             };
             transaction.set(transactionRef, newTransaction);
 
-            // 2. Update user's diamond balance
-            const userRef = doc(db, 'users', userId);
-            transaction.update(userRef, {
+            // 2. Update mechanic's diamond balance (only mechanics have diamonds)
+            const mechanicRef = doc(db, 'mechanics', userId);
+            transaction.update(mechanicRef, {
                 diamondBalance: increment(amount) // Conversion rate logic here if needed
             });
 

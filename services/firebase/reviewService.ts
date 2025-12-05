@@ -26,7 +26,6 @@ export const addReview = async (
 ) => {
     try {
         await runTransaction(db, async (transaction) => {
-            // 1. Create the review document with customer info
             const reviewRef = doc(collection(db, 'reviews'));
             transaction.set(reviewRef, {
                 bookingId,
@@ -39,8 +38,8 @@ export const addReview = async (
                 createdAt: serverTimestamp(),
             });
 
-            // 2. Update mechanic's rating stats
-            const mechanicRef = doc(db, 'users', mechanicId);
+            // 2. Update mechanic's rating stats (in mechanics collection)
+            const mechanicRef = doc(db, 'mechanics', mechanicId);
             transaction.update(mechanicRef, {
                 totalRating: increment(rating),
                 ratingCount: increment(1),
@@ -49,7 +48,8 @@ export const addReview = async (
             // 3. Update booking status to 'reviewed'
             const bookingRef = doc(db, 'bookings', bookingId);
             transaction.update(bookingRef, {
-                isReviewed: true
+                isReviewed: true,
+                reviewComment: comment,
             });
         });
         return true;
