@@ -157,8 +157,11 @@ export default function CallScreen() {
                     const agora = getAgoraService();
                     const channelName = agora?.generateChannelName?.(user.id, userId) || `call_${Date.now()}`;
                     channelNameRef.current = channelName;
+                    
+                    console.log('📞 Creating outgoing call...');
+                    console.log('📞 Channel name:', channelName);
 
-                    // Create call session in Firebase
+                    // Create call session in Firebase (includes channelName for receiver)
                     const newCallId = await createCallSession({
                         callerId: user.id,
                         callerName: user.name,
@@ -167,17 +170,20 @@ export default function CallScreen() {
                         receiverName: userName,
                         receiverPhoto: userPhoto,
                         callType,
-                        channelName,
+                        channelName, // IMPORTANT: This is saved to Firebase for receiver
                     });
                     setCurrentCallId(newCallId);
+                    console.log('📞 Call session created in Firebase:', newCallId);
 
                     // Join Agora channel
                     if (agora) {
                         const uid = agora.generateUid?.(user.id) || 0;
-                        await agora.joinVoiceCall?.(channelName, uid);
+                        console.log('📞 Caller joining channel with UID:', uid);
+                        const joined = await agora.joinVoiceCall?.(channelName, uid);
+                        console.log('📞 Caller join result:', joined);
                     }
 
-                    console.log('📞 Call session created:', newCallId);
+                    console.log('✅ Outgoing call setup complete');
                 } catch (error) {
                     console.error('Error creating call:', error);
                     Alert.alert('Error', 'Could not start call. Please try again.');
@@ -187,29 +193,41 @@ export default function CallScreen() {
         }
     }, [agoraReady, isIncoming, user, userId]);
 
-    // For incoming calls, join the channel
+    // For incoming calls, join the channel from Firebase (MUST match caller's channel)
     useEffect(() => {
         if (isIncoming && user && agoraReady && callId) {
             const joinCall = async () => {
                 try {
                     const agora = getAgoraService();
-                    const channelName = params.channelName as string ||
-                        agora?.generateChannelName?.(userId, user.id) ||
-                        `call_${Date.now()}`;
+                    
+                    // CRITICAL: Use the EXACT channel name from params (saved by caller in Firebase)
+                    // DO NOT regenerate - it must be the same channel as the caller joined
+                    const channelName = params.channelName as string;
+                    
+                    if (!channelName) {
+                        console.error('❌ No channel name provided for incoming call!');
+                        Alert.alert('Error', 'Call connection failed. No channel found.');
+                        return;
+                    }
+                    
                     channelNameRef.current = channelName;
+                    console.log('📞 Joining incoming call channel:', channelName);
 
                     if (agora) {
                         const uid = agora.generateUid?.(user.id) || 0;
-                        await agora.joinVoiceCall?.(channelName, uid);
+                        console.log('📞 Joining with UID:', uid);
+                        const joined = await agora.joinVoiceCall?.(channelName, uid);
+                        console.log('📞 Join result:', joined);
                     }
 
                     await updateCallStatus(callId, 'accepted');
 
-                    console.log('📞 Joined incoming call:', channelName);
+                    console.log('✅ Joined incoming call successfully:', channelName);
                     setIsConnected(true);
                     setIsConnecting(false);
                 } catch (error) {
                     console.error('Error joining call:', error);
+                    Alert.alert('Error', 'Failed to join call');
                 }
             };
             joinCall();

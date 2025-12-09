@@ -118,16 +118,29 @@ export const initializeAgoraEngine = async (): Promise<IRtcEngine | null> => {
             channelProfile: ChannelProfileType.ChannelProfileCommunication,
         });
 
-        // Enable audio with proper settings
+        // Enable audio - CRITICAL for voice calls
         agoraEngine.enableAudio();
+        agoraEngine.enableLocalAudio(true);
+        
+        // Set audio profile for voice call quality
         agoraEngine.setAudioProfile(0, 3); // Default profile, Gaming scenario for low latency
-        agoraEngine.adjustRecordingSignalVolume(100);
-        agoraEngine.adjustPlaybackSignalVolume(100);
-        agoraEngine.setEnableSpeakerphone(false); // Start with earpiece
+        
+        // Make sure we can hear remote users
+        agoraEngine.muteAllRemoteAudioStreams(false);
+        
+        // Adjust volumes to max
+        agoraEngine.adjustRecordingSignalVolume(100); // Microphone volume
+        agoraEngine.adjustPlaybackSignalVolume(100); // Speaker volume
+        agoraEngine.adjustAudioMixingVolume(100);
+        
+        // Set default audio route to earpiece (like normal phone call)
+        agoraEngine.setDefaultAudioRouteToSpeakerphone(false);
+        agoraEngine.setEnableSpeakerphone(false);
 
         isInitialized = true;
         console.log('✅ Agora Engine initialized successfully');
         console.log('📱 App ID:', AGORA_APP_ID.substring(0, 8) + '...');
+        console.log('🎤 Audio enabled, volumes set to 100%');
 
         return agoraEngine;
     } catch (error) {
@@ -218,16 +231,24 @@ export const joinVoiceCall = async (
             return true; // Return true for simulated mode
         }
 
+        console.log(`📞 Attempting to join channel: ${channelName}`);
+
         // Set client role to broadcaster (can send and receive audio)
         engine.setClientRole(ClientRoleType.ClientRoleBroadcaster);
 
-        // Enable audio before joining
+        // Enable audio before joining - CRITICAL
         engine.enableAudio();
+        engine.enableLocalAudio(true);
         engine.muteLocalAudioStream(false);
+        engine.muteAllRemoteAudioStreams(false);
+        
+        // Adjust volumes
+        engine.adjustRecordingSignalVolume(100);
+        engine.adjustPlaybackSignalVolume(100);
 
         // Join the channel with proper options
         const result = engine.joinChannel(
-            token || '', // Token (empty for testing)
+            token || '', // Token (empty for testing without token)
             channelName,
             uid,
             {
@@ -237,7 +258,10 @@ export const joinVoiceCall = async (
             }
         );
 
-        console.log(`✅ Joining voice call: ${channelName}, uid: ${uid}, result: ${result}`);
+        console.log(`✅ Join channel result: ${result}`);
+        console.log(`📞 Channel: ${channelName}, UID: ${uid}`);
+        console.log(`🎤 Local audio enabled, remote audio unmuted`);
+        
         return true;
     } catch (error) {
         console.error('❌ Failed to join call:', error);
