@@ -5,6 +5,8 @@ import {
     StyleSheet,
     TouchableOpacity,
     Dimensions,
+    Linking,
+    Platform,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,22 +16,48 @@ import { MapView, Marker, Polyline, PROVIDER_GOOGLE } from '@/utils/mapHelpers';
 import { useBookingStore } from '@/stores/bookingStore';
 import { getCurrentLocation, calculateDistance, calculateETA } from '@/services/location/locationTrackingService';
 import { getDirections, decodePolyline } from '@/services/location/locationService';
+import { getBooking } from '@/services/firebase/firestore';
+import { Booking } from '@/types';
 
 const { width, height } = Dimensions.get('window');
 
 export default function NavigateScreen() {
     const router = useRouter();
-    const { activeBooking } = useBookingStore();
+    const params = useLocalSearchParams();
+    const bookingIdParam = params.bookingId as string | undefined;
+    const { activeBooking: storeBooking } = useBookingStore();
     const mapRef = useRef<any>(null);
 
+    const [booking, setBooking] = useState<Booking | null>(null);
     const [mechanicLocation, setMechanicLocation] = useState<any>(null);
     const [route, setRoute] = useState<any[]>([]);
     const [distance, setDistance] = useState<number>(0);
     const [eta, setEta] = useState<number>(0);
+    const [loading, setLoading] = useState(true);
+
+    // Fetch booking - either from param or use store
+    useEffect(() => {
+        const fetchBooking = async () => {
+            setLoading(true);
+            if (bookingIdParam) {
+                // Fetch from Firestore using param
+                const fetchedBooking = await getBooking(bookingIdParam);
+                setBooking(fetchedBooking);
+            } else if (storeBooking) {
+                // Use active booking from store
+                setBooking(storeBooking);
+            }
+            setLoading(false);
+        };
+        
+        fetchBooking();
+    }, [bookingIdParam, storeBooking]);
 
     useEffect(() => {
-        if (!activeBooking || !activeBooking.customerLocation) {
-            router.back();
+        if (!booking || !booking.customerLocation) {
+            if (!loading) {
+                router.back();
+            }
             return;
         }
 
@@ -40,10 +68,10 @@ export default function NavigateScreen() {
         const interval = setInterval(updateLocation, 5000);
 
         return () => clearInterval(interval);
-    }, [activeBooking]);
+    }, [booking, loading]);
 
     const updateLocation = async () => {
-        if (!activeBooking?.customerLocation) return;
+        if (!booking?.customerLocation) return;
 
         try {
             const location = await getCurrentLocation();
@@ -58,8 +86,8 @@ export default function NavigateScreen() {
             const dist = calculateDistance(
                 location.latitude,
                 location.longitude,
-                activeBooking.customerLocation.latitude,
-                activeBooking.customerLocation.longitude
+                booking.customerLocation.latitude,
+                booking.customerLocation.longitude
             );
             setDistance(dist);
             setEta(calculateETA(dist));
@@ -67,7 +95,7 @@ export default function NavigateScreen() {
             // Get route
             const routeData = await getDirections(
                 { latitude: location.latitude, longitude: location.longitude },
-                activeBooking.customerLocation
+                booking.customerLocation
             );
 
             if (routeData) {
@@ -77,7 +105,7 @@ export default function NavigateScreen() {
                 if (mapRef.current && mechanicLocation) {
                     mapRef.current.fitToCoordinates([
                         mechanicLocation,
-                        activeBooking.customerLocation,
+                        booking.customerLocation,
                     ], {
                         edgePadding: { top: 100, right: 50, bottom: 300, left: 50 },
                         animated: true,
@@ -93,7 +121,7 @@ export default function NavigateScreen() {
         router.replace('/(mechanic)/active-job');
     };
 
-    if (!activeBooking) return null;
+    if (!booking || loading) return null;
 
     return (
         <View style={styles.container}>
@@ -125,9 +153,9 @@ export default function NavigateScreen() {
                     )}
 
                     {/* Customer Marker */}
-                    {Marker && (
+                    {Marker && booking.customerLocation && (
                         <Marker
-                            coordinate={activeBooking.customerLocation}
+                            coordinate={booking.customerLocation}
                             title="Customer"
                             pinColor={COLORS.danger}
                         />
@@ -181,10 +209,10 @@ export default function NavigateScreen() {
                     <Ionicons name="person-circle" size={48} color={COLORS.primary} />
                     <View style={styles.customerDetails}>
                         <Text style={styles.customerName}>
-                            {activeBooking.customerName || 'Customer'}
+                            {booking.customerName || 'Customer'}
                         </Text>
                         <Text style={styles.customerAddress} numberOfLines={2}>
-                            {activeBooking.customerLocation.address}
+                            {booking.customerLocation?.address || 'Loading...'}
                         </Text>
                     </View>
                 </View>

@@ -395,27 +395,34 @@ export default function MechanicDashboard() {
                                             </Text>
                                         </View>
                                     </View>
-                                    {/* Show review info if available */}
-                                    {job.isReviewed && job.rating !== undefined && (
-                                        <View style={styles.jobReviewSection}>
-                                            <View style={styles.jobReviewStars}>
-                                                {[1, 2, 3, 4, 5].map((star) => (
-                                                    <Ionicons
-                                                        key={star}
-                                                        name={star <= (job.rating || 0) ? 'star' : 'star-outline'}
-                                                        size={14}
-                                                        color={COLORS.warning}
-                                                    />
-                                                ))}
-                                                <Text style={styles.jobReviewRating}>{job.rating}/5</Text>
+                                    {/* Show review info if available, or awaiting review */}
+                                    <View style={styles.jobReviewSection}>
+                                        {job.isReviewed && job.rating !== undefined ? (
+                                            <>
+                                                <View style={styles.jobReviewStars}>
+                                                    {[1, 2, 3, 4, 5].map((star) => (
+                                                        <Ionicons
+                                                            key={star}
+                                                            name={star <= (job.rating || 0) ? 'star' : 'star-outline'}
+                                                            size={16}
+                                                            color={COLORS.warning}
+                                                        />
+                                                    ))}
+                                                    <Text style={styles.jobReviewRating}>{job.rating}/5</Text>
+                                                </View>
+                                                {job.reviewComment && (
+                                                    <Text style={styles.jobReviewComment} numberOfLines={2}>
+                                                        "{job.reviewComment}"
+                                                    </Text>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <View style={styles.awaitingReviewRow}>
+                                                <Ionicons name="time-outline" size={14} color={COLORS.textSecondary} />
+                                                <Text style={styles.awaitingReviewText}>Awaiting customer review</Text>
                                             </View>
-                                            {job.reviewComment && (
-                                                <Text style={styles.jobReviewComment} numberOfLines={2}>
-                                                    "{job.reviewComment}"
-                                                </Text>
-                                            )}
-                                        </View>
-                                    )}
+                                        )}
+                                    </View>
                                     <View style={styles.jobHistoryStatus}>
                                         <Ionicons name="checkmark-circle" size={16} color={COLORS.success} />
                                         <Text style={styles.jobHistoryStatusText}>Completed</Text>
@@ -706,6 +713,16 @@ const styles = StyleSheet.create({
         fontStyle: 'italic',
         marginTop: 4,
         lineHeight: 18,
+    },
+    awaitingReviewRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    awaitingReviewText: {
+        fontSize: SIZES.sm,
+        color: COLORS.textSecondary,
+        fontStyle: 'italic',
     },
     reviewCard: {
         marginBottom: 12,
