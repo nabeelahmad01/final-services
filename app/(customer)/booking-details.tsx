@@ -1,50 +1,179 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, Card } from '@/components';
+import { Avatar } from '@/components/shared/Avatar';
 import { Rating } from '@/components/ui/Rating';
 import { Badge } from '@/components/ui/Badge';
-import { COLORS, SIZES, FONTS } from '@/constants/theme';
+import { COLORS, SIZES, FONTS, CATEGORIES } from '@/constants/theme';
+import { Booking } from '@/types';
+import { getDoc, doc } from 'firebase/firestore';
+import { firestore } from '@/services/firebase/config';
+import { cancelBooking, createOrGetChat } from '@/services/firebase/firestore';
+
+// Format date for display
+const formatDate = (date: Date): string => {
+    return date.toLocaleDateString('en-PK', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+    });
+};
 
 export default function BookingDetails() {
     const router = useRouter();
     const params = useLocalSearchParams();
+    const bookingId = params.id as string;
 
-    // TODO: Fetch booking details from Firestore
-    const booking = {
-        id: params.id,
-        mechanicName: 'Ali Khan',
-        mechanicPhone: '+92 300 1234567',
-        mechanicRating: 4.8,
-        category: 'Car Mechanic',
-        status: 'ongoing',
-        price: 1500,
-        estimatedTime: '1 hour',
-        date: new Date().toLocaleDateString(),
-        customerLocation: {
-            address: '123 Main Street, Lahore',
-        },
+    const [booking, setBooking] = useState<Booking | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [cancelling, setCancelling] = useState(false);
+
+    useEffect(() => {
+        fetchBooking();
+    }, [bookingId]);
+
+    const fetchBooking = async () => {
+        try {
+            const docRef = doc(firestore, 'bookings', bookingId);
+            const docSnap = await getDoc(docRef);
+
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                setBooking({
+                    id: docSnap.id,
+                    ...data,
+                    startedAt: data.startedAt?.toDate() || new Date(),
+                    completedAt: data.completedAt?.toDate(),
+                    scheduledDate: data.scheduledDate?.toDate(),
+                } as Booking);
+            }
+        } catch (error) {
+            console.error('Error fetching booking:', error);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleCall = () => {
-        Linking.openURL(`tel:${booking.mechanicPhone}`);
+        if (booking?.mechanicPhone) {
+            Linking.openURL(`tel:${booking.mechanicPhone}`);
+        }
     };
 
-    const handleChat = () => {
-        router.push({ pathname: '/(shared)/chat', params: { userId: 'mechanicId' } });
+    const handleChat = async () => {
+        if (!booking) return;
+        try {
+            const chatId = await createOrGetChat(booking.customerId, booking.mechanicId);
+            router.push({
+                pathname: '/(shared)/chat',
+                params: {
+                    chatId,
+                    recipientId: booking.mechanicId,
+                    recipientName: booking.mechanicName || 'Mechanic',
+                    recipientPhoto: booking.mechanicPhoto || '',
+                },
+            });
+        } catch (error) {
+            console.error('Error opening chat:', error);
+        }
     };
 
     const handleTrack = () => {
         router.push('/(customer)/tracking');
     };
 
+    const handleReschedule = () => {
+        if (!booking) return;
+        router.push({
+            pathname: '/(customer)/schedule-booking',
+            params: {
+                mechanicId: booking.mechanicId,
+                mechanicName: booking.mechanicName || '',
+                mechanicPhoto: booking.mechanicPhoto || '',
+                mechanicRating: booking.mechanicRating?.toString() || '0',
+                category: booking.category,
+                bookingId: booking.id, // Pass for edit mode
+            },
+        });
+    };
+
+    const handleCancel = () => {
+        Alert.alert(
+            'Cancel Booking',
+            'Are you sure you want to cancel this booking?',
+            [
+                { text: 'No', style: 'cancel' },
+                {
+                    text: 'Yes, Cancel',
+                    style: 'destructive',
+                    onPress: async () => {
+                        setCancelling(true);
+                        try {
+                            await cancelBooking(bookingId);
+                            Alert.alert('Success', 'Booking cancelled successfully');
+                            router.back();
+                        } catch (error) {
+                            console.error('Error cancelling booking:', error);
+                            Alert.alert('Error', 'Failed to cancel booking');
+                        } finally {
+                            setCancelling(false);
+                        }
+                    },
+                },
+            ]
+        );
+    };
+
+    const getStatusBadge = () => {
+        if (!booking) return null;
+        switch (booking.status) {
+            case 'ongoing':
+                return <Badge text="In Progress" variant="info" />;
+            case 'scheduled':
+                return <Badge text="Scheduled" variant="warning" />;
+            case 'confirmed':
+                return <Badge text="Confirmed" variant="success" />;
+            case 'completed':
+                return <Badge text="Completed" variant="success" />;
+            case 'cancelled':
+                return <Badge text="Cancelled" variant="danger" />;
+            default:
+                return null;
+        }
+    };
+
+    if (loading) {
+        return (
+            <SafeAreaView style={styles.container}>
+                <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color={COLORS.primary} />
+                </View>
+            </SafeAreaView>
+        );
+    }
+
+    if (!booking) {
+        return (
+            <SafeAreaView style={styles.container}>
+                <View style={styles.loadingContainer}>
+                    <Text style={styles.errorText}>Booking not found</Text>
+                    <Button title="Go Back" onPress={() => router.back()} />
+                </View>
+            </SafeAreaView>
+        );
+    }
+
+    const category = CATEGORIES.find(c => c.id === booking.category);
+
     return (
         <SafeAreaView style={styles.container}>
             {/* Header */}
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.push('/(customer)/home')}>
+                <TouchableOpacity onPress={() => router.back()}>
                     <Ionicons name="arrow-back" size={24} color={COLORS.text} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Booking Details</Text>
@@ -53,28 +182,52 @@ export default function BookingDetails() {
 
             <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
                 {/* Status Banner */}
-                <Card style={[styles.statusBanner, { backgroundColor: COLORS.primary + '15' }]}>
-                    <Ionicons name="time-outline" size={32} color={COLORS.primary} />
+                <Card style={[styles.statusBanner, {
+                    backgroundColor: booking.isScheduled ? COLORS.info + '15' : COLORS.primary + '15'
+                }]}>
+                    <Ionicons
+                        name={booking.isScheduled ? 'calendar' : 'time-outline'}
+                        size={32}
+                        color={booking.isScheduled ? COLORS.info : COLORS.primary}
+                    />
                     <View style={styles.statusInfo}>
-                        <Text style={styles.statusTitle}>Service in Progress</Text>
-                        <Text style={styles.statusSubtitle}>Your mechanic is on the way</Text>
+                        <Text style={styles.statusTitle}>
+                            {booking.isScheduled ? 'Scheduled Booking' : 'Service in Progress'}
+                        </Text>
+                        <Text style={styles.statusSubtitle}>
+                            {booking.isScheduled && booking.scheduledDate
+                                ? `${formatDate(booking.scheduledDate)} at ${booking.scheduledTime}`
+                                : 'Your mechanic is on the way'}
+                        </Text>
                     </View>
-                    <Badge text={booking.status} variant="info" />
+                    {getStatusBadge()}
                 </Card>
+
+                {/* Pre-booked Badge */}
+                {booking.isScheduled && (
+                    <View style={styles.preBookedBadge}>
+                        <Ionicons name="calendar-outline" size={16} color={COLORS.info} />
+                        <Text style={styles.preBookedText}>Pre-booked Service</Text>
+                    </View>
+                )}
 
                 {/* Mechanic Info */}
                 <Card style={styles.mechanicCard}>
                     <Text style={styles.sectionTitle}>Mechanic</Text>
                     <View style={styles.mechanicInfo}>
-                        <View style={styles.avatar}>
-                            <Text style={styles.avatarText}>{booking.mechanicName.charAt(0)}</Text>
-                        </View>
+                        <Avatar
+                            name={booking.mechanicName || 'M'}
+                            uri={booking.mechanicPhoto ?? undefined}
+                            size={60}
+                        />
                         <View style={styles.mechanicDetails}>
-                            <Text style={styles.mechanicName}>{booking.mechanicName}</Text>
-                            <View style={styles.ratingRow}>
-                                <Rating rating={booking.mechanicRating} size={16} />
-                                <Text style={styles.ratingText}>{booking.mechanicRating}</Text>
-                            </View>
+                            <Text style={styles.mechanicName}>{booking.mechanicName || 'Mechanic'}</Text>
+                            {booking.mechanicRating && (
+                                <View style={styles.ratingRow}>
+                                    <Rating rating={booking.mechanicRating} size={16} />
+                                    <Text style={styles.ratingText}>{booking.mechanicRating.toFixed(1)}</Text>
+                                </View>
+                            )}
                         </View>
                     </View>
 
@@ -97,13 +250,17 @@ export default function BookingDetails() {
                     <View style={styles.detailRow}>
                         <Ionicons name="construct" size={20} color={COLORS.textSecondary} />
                         <Text style={styles.detailLabel}>Category</Text>
-                        <Text style={styles.detailValue}>{booking.category}</Text>
+                        <View style={[styles.categoryBadge, { backgroundColor: (category?.color || COLORS.primary) + '20' }]}>
+                            <Text style={[styles.categoryText, { color: category?.color || COLORS.primary }]}>
+                                {category?.name || 'Service'}
+                            </Text>
+                        </View>
                     </View>
 
                     <View style={styles.detailRow}>
                         <Ionicons name="cash" size={20} color={COLORS.textSecondary} />
                         <Text style={styles.detailLabel}>Price</Text>
-                        <Text style={styles.detailValue}>PKR {booking.price}</Text>
+                        <Text style={styles.priceValue}>PKR {booking.price?.toLocaleString()}</Text>
                     </View>
 
                     <View style={styles.detailRow}>
@@ -112,16 +269,32 @@ export default function BookingDetails() {
                         <Text style={styles.detailValue}>{booking.estimatedTime}</Text>
                     </View>
 
-                    <View style={styles.detailRow}>
-                        <Ionicons name="calendar" size={20} color={COLORS.textSecondary} />
-                        <Text style={styles.detailLabel}>Date</Text>
-                        <Text style={styles.detailValue}>{booking.date}</Text>
-                    </View>
+                    {booking.isScheduled && booking.scheduledDate && (
+                        <View style={styles.detailRow}>
+                            <Ionicons name="calendar" size={20} color={COLORS.info} />
+                            <Text style={styles.detailLabel}>Scheduled</Text>
+                            <Text style={[styles.detailValue, { color: COLORS.info }]}>
+                                {formatDate(booking.scheduledDate)}
+                            </Text>
+                        </View>
+                    )}
+
+                    {booking.isScheduled && booking.scheduledTime && (
+                        <View style={styles.detailRow}>
+                            <Ionicons name="alarm" size={20} color={COLORS.info} />
+                            <Text style={styles.detailLabel}>Time</Text>
+                            <Text style={[styles.detailValue, { color: COLORS.info }]}>
+                                {booking.scheduledTime}
+                            </Text>
+                        </View>
+                    )}
 
                     <View style={styles.detailRow}>
                         <Ionicons name="location" size={20} color={COLORS.textSecondary} />
                         <Text style={styles.detailLabel}>Location</Text>
-                        <Text style={styles.detailValue}>{booking.customerLocation.address}</Text>
+                        <Text style={styles.detailValue} numberOfLines={2}>
+                            {booking.customerLocation?.address}
+                        </Text>
                     </View>
                 </Card>
 
@@ -134,6 +307,26 @@ export default function BookingDetails() {
                         style={styles.actionButton}
                     />
                 )}
+
+                {(booking.status === 'scheduled' || booking.status === 'confirmed') && (
+                    <>
+                        <Button
+                            title="Reschedule Booking"
+                            onPress={handleReschedule}
+                            variant="outline"
+                            icon={<Ionicons name="calendar-outline" size={20} color={COLORS.primary} />}
+                            style={styles.actionButton}
+                        />
+                        <Button
+                            title="Cancel Booking"
+                            onPress={handleCancel}
+                            variant="outline"
+                            loading={cancelling}
+                            style={StyleSheet.flatten([styles.actionButton, styles.cancelButton])}
+                            icon={<Ionicons name="close-circle-outline" size={20} color={COLORS.danger} />}
+                        />
+                    </>
+                )}
             </ScrollView>
         </SafeAreaView>
     );
@@ -143,6 +336,17 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: COLORS.background,
+    },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 16,
+    },
+    errorText: {
+        fontSize: SIZES.lg,
+        color: COLORS.textSecondary,
+        fontFamily: FONTS.medium,
     },
     header: {
         flexDirection: 'row',
@@ -187,6 +391,24 @@ const styles = StyleSheet.create({
         fontFamily: FONTS.regular,
         color: COLORS.textSecondary,
     },
+    preBookedBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        backgroundColor: COLORS.info + '15',
+        paddingVertical: 8,
+        paddingHorizontal: 16,
+        borderRadius: 20,
+        alignSelf: 'center',
+        marginBottom: 16,
+    },
+    preBookedText: {
+        fontSize: SIZES.sm,
+        fontWeight: '600',
+        color: COLORS.info,
+        fontFamily: FONTS.semiBold,
+    },
     mechanicCard: {
         padding: SIZES.padding,
         marginBottom: 16,
@@ -202,20 +424,6 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         gap: 12,
         marginBottom: 16,
-    },
-    avatar: {
-        width: 60,
-        height: 60,
-        borderRadius: 30,
-        backgroundColor: COLORS.primary,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    avatarText: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        fontFamily: FONTS.bold,
-        color: COLORS.white,
     },
     mechanicDetails: {
         flex: 1,
@@ -284,8 +492,29 @@ const styles = StyleSheet.create({
         fontWeight: '500',
         fontFamily: FONTS.medium,
         color: COLORS.text,
+        textAlign: 'right',
+        maxWidth: '50%',
+    },
+    priceValue: {
+        fontSize: SIZES.lg,
+        fontWeight: 'bold',
+        fontFamily: FONTS.bold,
+        color: COLORS.success,
+    },
+    categoryBadge: {
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+        borderRadius: 12,
+    },
+    categoryText: {
+        fontSize: SIZES.sm,
+        fontWeight: '600',
+        fontFamily: FONTS.semiBold,
     },
     actionButton: {
         marginBottom: 12,
+    },
+    cancelButton: {
+        borderColor: COLORS.danger,
     },
 });

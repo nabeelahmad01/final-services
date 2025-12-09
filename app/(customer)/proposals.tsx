@@ -11,13 +11,14 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { subscribeToProposals, updateProposalStatus, createBooking, updateServiceRequestStatus, getServiceRequest, subscribeToServiceRequest } from '@/services/firebase/firestore';
+import { subscribeToProposals, updateProposalStatus, createBooking, updateServiceRequestStatus, getServiceRequest, subscribeToServiceRequest, subscribeToFavorites, addToFavorites, removeFromFavorites } from '@/services/firebase/firestore';
 import { COLORS, SIZES } from '@/constants/theme';
-import { Proposal, ServiceRequest } from '@/types';
+import { Proposal, ServiceRequest, FavoriteMechanic } from '@/types';
 import { MapView, Marker, PROVIDER_GOOGLE } from '@/utils/mapHelpers';
 import { ProposalCard } from '@/components/proposal/ProposalCard';
 import { Avatar } from '@/components/shared/Avatar';
 import { useModal, showSuccessModal, showErrorModal, showConfirmModal } from '@/utils/modalService';
+import { useAuthStore } from '@/stores/authStore';
 
 const { width } = Dimensions.get('window');
 
@@ -25,6 +26,7 @@ export default function Proposals() {
     const router = useRouter();
     const params = useLocalSearchParams();
     const requestId = params.requestId as string;
+    const { user } = useAuthStore();
     const { showModal } = useModal();
     const mapRef = useRef<any>(null);
 
@@ -33,9 +35,10 @@ export default function Proposals() {
     const [accepting, setAccepting] = useState<string | null>(null);
     const [offeredPrice, setOfferedPrice] = useState<number>(260); // Default or from request
     const [driversViewing, setDriversViewing] = useState(2); // Mock for demo
+    const [favorites, setFavorites] = useState<Set<string>>(new Set());
 
     useEffect(() => {
-        if (!requestId) return;
+        if (!requestId || !user) return;
 
         // Subscribe to service request for real-time updates
         const unsubscribeRequest = subscribeToServiceRequest(requestId, (req) => {
@@ -47,42 +50,90 @@ export default function Proposals() {
 
         const unsubscribeProposals = subscribeToProposals(requestId, setProposals);
 
+        // Subscribe to favorites
+        const unsubscribeFavorites = subscribeToFavorites(user.id, (favs) => {
+            const favIds = new Set(favs.map(f => f.mechanicId));
+            setFavorites(favIds);
+        });
+
         return () => {
             unsubscribeRequest();
             unsubscribeProposals();
+            unsubscribeFavorites();
         };
-    }, [requestId]);
+    }, [requestId, user]);
 
     const handleAcceptProposal = async (proposal: Proposal) => {
         setAccepting(proposal.id);
         try {
             if (!serviceRequest) throw new Error('Service request not found');
 
+            // Check if this is a scheduled request
+            const isScheduledRequest = serviceRequest.isScheduled === true;
+
             // Update proposal status
             await updateProposalStatus(proposal.id, 'accepted');
 
-            // Create booking
-            await createBooking({
+            // Create booking with appropriate status
+            const bookingId = await createBooking({
                 customerId: proposal.customerId,
+                customerName: serviceRequest.customerName,
+                customerPhone: serviceRequest.customerPhone,
                 mechanicId: proposal.mechanicId,
+                mechanicName: proposal.mechanicName,
+                mechanicPhoto: proposal.mechanicPhoto || null,
+                mechanicRating: proposal.mechanicRating,
+                mechanicPhone: proposal.mechanicPhone || null,
                 requestId: proposal.requestId,
                 proposalId: proposal.id,
                 category: serviceRequest.category,
                 customerLocation: serviceRequest.location,
                 price: proposal.price,
                 estimatedTime: proposal.estimatedTime,
-                status: 'ongoing',
+                status: isScheduledRequest ? 'scheduled' : 'ongoing',
+                // Add scheduling info if scheduled
+                isScheduled: isScheduledRequest,
+                scheduledDate: isScheduledRequest ? serviceRequest.scheduledDate : undefined,
+                scheduledTime: isScheduledRequest ? serviceRequest.scheduledTime : undefined,
             });
 
             // Update request status
             await updateServiceRequestStatus(requestId, 'accepted');
 
-            showSuccessModal(
-                showModal,
-                'Success',
-                'Proposal accepted! Redirecting to tracking...',
-                () => router.replace('/(customer)/tracking')
-            );
+            if (isScheduledRequest) {
+                // For scheduled bookings - show confirmation with details
+                const scheduledDateStr = serviceRequest.scheduledDate 
+                    ? (typeof (serviceRequest.scheduledDate as any).toDate === 'function'
+                        ? (serviceRequest.scheduledDate as any).toDate().toLocaleDateString()
+                        : new Date(serviceRequest.scheduledDate).toLocaleDateString())
+                    : 'TBD';
+                
+                showModal({
+                    type: 'success',
+                    title: '🎉 Booking Confirmed!',
+                    message: `Your service is scheduled for:\n\n📅 ${scheduledDateStr}\n⏰ ${serviceRequest.scheduledTime || 'TBD'}\n\nYou can now chat or call the mechanic. We'll remind you before the appointment.`,
+                    buttons: [
+                        {
+                            text: 'Go to Home',
+                            onPress: () => router.replace('/(customer)/home'),
+                            style: 'default',
+                        },
+                        {
+                            text: 'View Booking',
+                            onPress: () => router.replace(`/(customer)/booking-details?id=${bookingId}`),
+                            style: 'success',
+                        },
+                    ],
+                });
+            } else {
+                // For immediate bookings - go to tracking
+                showSuccessModal(
+                    showModal,
+                    'Success',
+                    'Proposal accepted! Redirecting to tracking...',
+                    () => router.replace('/(customer)/tracking')
+                );
+            }
         } catch (error: any) {
             showErrorModal(showModal, 'Error', error.message);
         } finally {
@@ -95,6 +146,29 @@ export default function Proposals() {
             await updateProposalStatus(proposal.id, 'rejected');
         } catch (error: any) {
             console.error('Error rejecting proposal:', error);
+        }
+    };
+
+    const handleToggleFavorite = async (proposal: Proposal) => {
+        if (!user) return;
+        
+        try {
+            if (favorites.has(proposal.mechanicId)) {
+                await removeFromFavorites(user.id, proposal.mechanicId);
+            } else {
+                await addToFavorites(user.id, {
+                    id: proposal.mechanicId, // Use mechanicId as ID or generate new? addToFavorites usually takes mechanic object
+                    // Wait, addToFavorites takes (customerId, mechanic). Proposal has mechanic info.
+                    // Let's create a partial mechanic object
+                    name: proposal.mechanicName,
+                    phone: proposal.mechanicPhone || '',
+                    profilePic: proposal.mechanicPhoto,
+                    rating: proposal.mechanicRating,
+                    totalRatings: proposal.mechanicTotalRatings,
+                } as any);
+            }
+        } catch (error) {
+            console.error('Error toggling favorite:', error);
         }
     };
 
@@ -180,6 +254,8 @@ export default function Proposals() {
                                     onAccept={() => handleAcceptProposal(item)}
                                     onDecline={() => handleDeclineProposal(item)}
                                     isProcessing={accepting === item.id}
+                                    isFavorite={favorites.has(item.mechanicId)}
+                                    onToggleFavorite={() => handleToggleFavorite(item)}
                                 />
                             )}
                             showsVerticalScrollIndicator={false}

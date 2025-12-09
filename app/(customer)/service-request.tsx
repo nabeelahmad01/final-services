@@ -15,6 +15,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useAuthStore } from '@/stores/authStore';
@@ -25,6 +26,13 @@ import { ServiceCategory } from '@/types';
 import { MapView, Marker, PROVIDER_GOOGLE } from '@/utils/mapHelpers';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useModal, showErrorModal } from '@/utils/modalService';
+
+// Time slots for selection
+const TIME_SLOTS = [
+    '09:00 AM', '10:00 AM', '11:00 AM', '12:00 PM',
+    '01:00 PM', '02:00 PM', '03:00 PM', '04:00 PM',
+    '05:00 PM', '06:00 PM', '07:00 PM', '08:00 PM',
+];
 
 export default function ServiceRequest() {
     const router = useRouter();
@@ -44,6 +52,12 @@ export default function ServiceRequest() {
     const [loading, setLoading] = useState(false);
     const [loadingLocation, setLoadingLocation] = useState(true);
     const [listViewDisplayed, setListViewDisplayed] = useState<'auto' | boolean>('auto');
+
+    // Scheduling States
+    const [isScheduled, setIsScheduled] = useState(false);
+    const [selectedDate, setSelectedDate] = useState(new Date());
+    const [selectedTime, setSelectedTime] = useState<string>('');
+    const [showDatePicker, setShowDatePicker] = useState(false);
 
     const categoryInfo = CATEGORIES.find(c => c.id === category);
 
@@ -135,12 +149,28 @@ export default function ServiceRequest() {
         }
     };
 
+    const handleDateChange = (event: any, date?: Date) => {
+        setShowDatePicker(Platform.OS === 'ios');
+        if (date) {
+            setSelectedDate(date);
+        }
+    };
+
     const handleSubmit = async () => {
         if (!description || !address) {
             showErrorModal(
                 showModal,
                 'Error',
                 'Please fill all fields and select location on map'
+            );
+            return;
+        }
+
+        if (isScheduled && !selectedTime) {
+            showErrorModal(
+                showModal,
+                'Error',
+                'Please select a time for your scheduled request'
             );
             return;
         }
@@ -168,10 +198,14 @@ export default function ServiceRequest() {
                 category,
                 description,
                 status: 'pending',
-                urgency: 'medium',
+                urgency: isScheduled ? 'low' : 'medium', // Lower urgency for scheduled
+                customerPhoto: user.profilePic || null, // Use null instead of undefined
+                isScheduled: isScheduled || false,
+                ...(isScheduled && selectedDate ? { scheduledDate: selectedDate } : {}),
+                ...(isScheduled && selectedTime ? { scheduledTime: selectedTime } : {}),
             });
 
-            // 🚀 NEW: Find nearby mechanics and notify them
+            // 🚀 Finding nearby mechanics
             console.log('Finding nearby mechanics within 10km...');
             const nearbyMechanics = await getNearbyMechanics(location, category, 10);
             console.log(`Found ${nearbyMechanics.length} nearby mechanics`);
@@ -184,15 +218,16 @@ export default function ServiceRequest() {
                         categoryInfo?.name || category,
                         user.name
                     );
-                    console.log(`✅ Notified mechanic: ${mechanic.name}`);
                 } catch (error) {
                     console.log(`❌ Failed to notify mechanic ${mechanic.id}:`, error);
                 }
             }
 
             showModal({
-                title: 'Success',
-                message: `Service request created! ${nearbyMechanics.length} mechanics notified.`,
+                title: isScheduled ? 'Request Scheduled' : 'Request Sent',
+                message: isScheduled 
+                    ? `Your request is scheduled for ${selectedDate.toLocaleDateString()} at ${selectedTime}. Mechanics will review it shortly.`
+                    : `Service request created! ${nearbyMechanics.length} mechanics notified.`,
                 type: 'success',
                 buttons: [
                     {
@@ -359,6 +394,11 @@ export default function ServiceRequest() {
         );
     };
 
+    // Calculate minimum date (today) and maximum date (30 days from now)
+    const minDate = new Date();
+    const maxDate = new Date();
+    maxDate.setDate(maxDate.getDate() + 30);
+
     return (
         <SafeAreaView style={styles.container}>
             <KeyboardAvoidingView
@@ -399,6 +439,95 @@ export default function ServiceRequest() {
                         </View>
                     </View>
 
+                    {/* Scheduling Toggle */}
+                    <View style={styles.scheduleToggleContainer}>
+                        <TouchableOpacity
+                            style={[styles.toggleButton, !isScheduled && styles.toggleButtonActive]}
+                            onPress={() => setIsScheduled(false)}
+                        >
+                            <Ionicons
+                                name="flash"
+                                size={18}
+                                color={!isScheduled ? COLORS.white : COLORS.textSecondary}
+                            />
+                            <Text style={[styles.toggleText, !isScheduled && styles.toggleTextActive]}>
+                                Immediate
+                            </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.toggleButton, isScheduled && styles.toggleButtonActive]}
+                            onPress={() => setIsScheduled(true)}
+                        >
+                            <Ionicons
+                                name="calendar"
+                                size={18}
+                                color={isScheduled ? COLORS.white : COLORS.textSecondary}
+                            />
+                            <Text style={[styles.toggleText, isScheduled && styles.toggleTextActive]}>
+                                Schedule for Later
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    {/* Scheduling Inputs */}
+                    {isScheduled && (
+                        <View style={styles.schedulingSection}>
+                            {/* Date Picker */}
+                            <TouchableOpacity
+                                style={styles.datePickerButton}
+                                onPress={() => setShowDatePicker(true)}
+                            >
+                                <View style={styles.pickerRow}>
+                                    <View>
+                                        <Text style={styles.pickerLabel}>Date</Text>
+                                        <Text style={styles.pickerValue}>
+                                            {selectedDate.toLocaleDateString('en-PK', {
+                                                month: 'short', day: 'numeric', year: 'numeric'
+                                            })}
+                                        </Text>
+                                    </View>
+                                    <Ionicons name="calendar-outline" size={20} color={COLORS.primary} />
+                                </View>
+                            </TouchableOpacity>
+
+                            {showDatePicker && (
+                                <DateTimePicker
+                                    value={selectedDate}
+                                    mode="date"
+                                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                                    onChange={handleDateChange}
+                                    minimumDate={minDate}
+                                    maximumDate={maxDate}
+                                />
+                            )}
+
+                            {/* Time Slots */}
+                            <Text style={styles.timeLabel}>Select Time</Text>
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.timeScroll}>
+                                {TIME_SLOTS.map((time) => (
+                                    <TouchableOpacity
+                                        key={time}
+                                        style={[
+                                            styles.timeSlot,
+                                            selectedTime === time && styles.timeSlotSelected,
+                                        ]}
+                                        onPress={() => setSelectedTime(time)}
+                                    >
+                                        <Text
+                                            style={[
+                                                styles.timeSlotText,
+                                                selectedTime === time && styles.timeSlotTextSelected,
+                                            ]}
+                                        >
+                                            {time}
+                                        </Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </ScrollView>
+                        </View>
+                    )}
+
+
                     {/* Map with Search */}
                     <View style={styles.mapSection}>
                         <Text style={styles.sectionLabel}>Service Location</Text>
@@ -431,13 +560,15 @@ export default function ServiceRequest() {
                         <View style={styles.infoCard}>
                             <Ionicons name="information-circle" size={24} color={COLORS.primary} />
                             <Text style={styles.infoText}>
-                                Mechanics in your area will receive this request and send proposals with
-                                their pricing and availability.
+                                {isScheduled 
+                                    ? `Mechanics will receive your request for ${selectedDate.toLocaleDateString()} and send proposals.`
+                                    : "Mechanics in your area will receive this request and send proposals with their pricing and availability."
+                                }
                             </Text>
                         </View>
 
                         <Button
-                            title="Submit Request"
+                            title={isScheduled ? "Schedule Request" : "Submit Request"}
                             onPress={handleSubmit}
                             loading={loading}
                             style={styles.submitButton}
@@ -483,13 +614,98 @@ const styles = StyleSheet.create({
         backgroundColor: COLORS.surface,
         padding: 16,
         borderRadius: 16,
-        marginBottom: 24,
+        marginBottom: 16, // Reduced margin
         gap: 16,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.08,
         shadowRadius: 8,
         elevation: 3,
+    },
+    scheduleToggleContainer: {
+        flexDirection: 'row',
+        backgroundColor: COLORS.surface,
+        borderRadius: 12,
+        padding: 4,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+    },
+    toggleButton: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        paddingVertical: 10,
+        borderRadius: 8,
+    },
+    toggleButtonActive: {
+        backgroundColor: COLORS.primary,
+    },
+    toggleText: {
+        fontSize: SIZES.sm,
+        color: COLORS.textSecondary,
+        fontWeight: '600',
+    },
+    toggleTextActive: {
+        color: COLORS.white,
+    },
+    schedulingSection: {
+        marginBottom: 20,
+    },
+    datePickerButton: {
+        backgroundColor: COLORS.surface,
+        padding: 16,
+        borderRadius: 12,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+    },
+    pickerRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    pickerLabel: {
+        fontSize: SIZES.xs,
+        color: COLORS.textSecondary,
+        marginBottom: 4,
+    },
+    pickerValue: {
+        fontSize: SIZES.base,
+        fontWeight: '600',
+        color: COLORS.text,
+    },
+    timeLabel: {
+        fontSize: SIZES.sm,
+        fontWeight: '600',
+        color: COLORS.text,
+        marginBottom: 8,
+    },
+    timeScroll: {
+        gap: 8,
+        paddingBottom: 4,
+    },
+    timeSlot: {
+        paddingVertical: 8,
+        paddingHorizontal: 16,
+        borderRadius: 8,
+        backgroundColor: COLORS.surface,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+    },
+    timeSlotSelected: {
+        backgroundColor: COLORS.primary,
+        borderColor: COLORS.primary,
+    },
+    timeSlotText: {
+        fontSize: SIZES.sm,
+        color: COLORS.text,
+    },
+    timeSlotTextSelected: {
+        color: COLORS.white,
+        fontWeight: '600',
     },
     categoryIcon: {
         width: 60,

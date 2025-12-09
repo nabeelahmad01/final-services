@@ -226,6 +226,7 @@ export default function RootLayout() {
                 customerId: selectedRequest.customerId,
                 mechanicId: user.id,
                 mechanicName: user.name,
+                mechanicPhone: user.phone,
                 mechanicRating: mechanic.rating,
                 mechanicTotalRatings: mechanic.totalRatings,
                 price: parseInt(price),
@@ -247,7 +248,18 @@ export default function RootLayout() {
             // Close modal and mark request as responded (won't show again)
             markAsResponded(selectedRequest.id);
 
-            console.log('✅ Proposal submitted!');
+            // Show appropriate confirmation based on request type
+            if (selectedRequest.isScheduled) {
+                const scheduledDateStr = selectedRequest.scheduledDate 
+                    ? (typeof (selectedRequest.scheduledDate as any).toDate === 'function'
+                        ? (selectedRequest.scheduledDate as any).toDate().toLocaleDateString()
+                        : 'TBD')
+                    : 'TBD';
+                
+                console.log(`✅ Scheduled proposal submitted for ${scheduledDateStr} at ${selectedRequest.scheduledTime || 'TBD'}`);
+            } else {
+                console.log('✅ Immediate proposal submitted!');
+            }
         } catch (error: any) {
             console.error('Error submitting proposal:', error);
         } finally {

@@ -49,6 +49,7 @@ export const addReview = async (
             const bookingRef = doc(db, 'bookings', bookingId);
             transaction.update(bookingRef, {
                 isReviewed: true,
+                rating: rating,
                 reviewComment: comment,
             });
         });
@@ -69,10 +70,14 @@ export const getMechanicReviews = async (mechanicId: string, limitCount = 10) =>
         );
 
         const querySnapshot = await getDocs(q);
-        return querySnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        })) as Review[];
+        return querySnapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                ...data,
+                createdAt: data.createdAt?.toDate() || new Date(),
+            };
+        }) as Review[];
     } catch (error) {
         console.error('Error fetching reviews:', error);
         return [];

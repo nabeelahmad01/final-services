@@ -8,6 +8,7 @@ import {
     Dimensions,
     TextInput,
     Animated,
+    ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SIZES, FONTS, CATEGORIES } from '@/constants/theme';
@@ -17,7 +18,7 @@ import { playServiceRequestRingtone, stopServiceRequestRingtone } from '@/servic
 
 interface ServiceRequestModalProps {
     request: ServiceRequest | null;
-    onSubmitProposal: (price: string, time: string, message: string) => void;
+    onSubmitProposal: (price: string, time: string, message: string) => Promise<void> | void;
     onCancel: () => void;
 }
 
@@ -32,6 +33,7 @@ export const ServiceRequestModal: React.FC<ServiceRequestModalProps> = ({
     const [time, setTime] = useState('30 min');
     const [message, setMessage] = useState('I can help you with this!');
     const [timeRemaining, setTimeRemaining] = useState(120); // 2 minutes in seconds
+    const [isSubmitting, setIsSubmitting] = useState(false); // Prevent double submission
     const pulseAnim = React.useRef(new Animated.Value(1)).current;
 
     // Play ringtone when modal opens, stop when closed
@@ -56,6 +58,7 @@ export const ServiceRequestModal: React.FC<ServiceRequestModalProps> = ({
             setTime('30 min');
             setMessage('I can help you with this!');
             setTimeRemaining(120);
+            setIsSubmitting(false); // Reset submission state
         }
     }, [request?.id]);
 
@@ -107,9 +110,16 @@ export const ServiceRequestModal: React.FC<ServiceRequestModalProps> = ({
     const seconds = timeRemaining % 60;
     const isUrgent = timeRemaining < 30;
 
-    const handleSubmit = () => {
-        if (!price || !time) return;
-        onSubmitProposal(price, time, message);
+    const handleSubmit = async () => {
+        if (!price || !time || isSubmitting) return;
+        
+        setIsSubmitting(true);
+        try {
+            await onSubmitProposal(price, time, message);
+        } catch (error) {
+            console.error('Error submitting proposal:', error);
+            setIsSubmitting(false); // Re-enable on error
+        }
     };
 
     return (
@@ -202,13 +212,19 @@ export const ServiceRequestModal: React.FC<ServiceRequestModalProps> = ({
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                            style={[styles.submitButton, (!price || !time) && styles.submitButtonDisabled]}
+                            style={[styles.submitButton, (!price || !time || isSubmitting) && styles.submitButtonDisabled]}
                             onPress={handleSubmit}
-                            disabled={!price || !time}
+                            disabled={!price || !time || isSubmitting}
                             activeOpacity={0.8}
                         >
-                            <Ionicons name="checkmark-circle" size={20} color={COLORS.white} />
-                            <Text style={styles.submitButtonText}>Submit Proposal</Text>
+                            {isSubmitting ? (
+                                <ActivityIndicator size="small" color={COLORS.white} />
+                            ) : (
+                                <Ionicons name="checkmark-circle" size={20} color={COLORS.white} />
+                            )}
+                            <Text style={styles.submitButtonText}>
+                                {isSubmitting ? 'Submitting...' : 'Submit Proposal'}
+                            </Text>
                         </TouchableOpacity>
                     </View>
 

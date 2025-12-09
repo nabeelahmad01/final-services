@@ -52,7 +52,7 @@ export interface ServiceRequest {
     customerId: string;
     customerName: string;
     customerPhone: string;
-    customerPhoto?: string;
+    customerPhoto?: string | null;
     category: ServiceCategory;
     description: string;
     images?: string[];
@@ -69,6 +69,10 @@ export interface ServiceRequest {
     createdAt: Date;
     urgency: 'low' | 'medium' | 'high';
     offeredPrice?: number;
+    // Scheduling fields
+    isScheduled?: boolean; // true = scheduled for later, false/undefined = immediate
+    scheduledDate?: Date;
+    scheduledTime?: string; // e.g., "10:00 AM"
 }
 
 export interface Proposal {
@@ -80,6 +84,7 @@ export interface Proposal {
     mechanicPhoto?: string;
     mechanicRating: number;
     mechanicTotalRatings: number;
+    mechanicPhone?: string; // Added for contact info
     price: number;
     estimatedTime: string;
     message: string;
@@ -95,6 +100,10 @@ export interface Booking {
     customerPhone?: string;
     customerPhoto?: string;
     mechanicId: string;
+    mechanicName?: string;
+    mechanicPhone?: string | null;
+    mechanicPhoto?: string | null;
+    mechanicRating?: number;
     requestId: string;
     proposalId: string;
     category: ServiceCategory;
@@ -109,7 +118,11 @@ export interface Booking {
     };
     price: number;
     estimatedTime: string;
-    status: 'ongoing' | 'completed' | 'cancelled';
+    status: 'scheduled' | 'confirmed' | 'ongoing' | 'completed' | 'cancelled';
+    // Scheduling fields
+    isScheduled?: boolean;
+    scheduledDate?: Date;
+    scheduledTime?: string;
     startedAt: Date;
     completedAt?: Date;
     rating?: number;
@@ -190,7 +203,23 @@ export interface Review {
     bookingId: string;
     mechanicId: string;
     customerId: string;
+    customerName: string;
+    customerPhoto?: string;
     rating: number;
     comment: string;
-    createdAt: any; // Firestore Timestamp
+    createdAt: Date;
+}
+
+export interface FavoriteMechanic {
+    id: string;
+    customerId: string;
+    mechanicId: string;
+    mechanicName: string;
+    mechanicPhone: string;
+    mechanicPhoto?: string;
+    mechanicRating: number;
+    mechanicTotalRatings: number;
+    categories: ServiceCategory[];
+    completedJobs: number;
+    addedAt: Date;
 }

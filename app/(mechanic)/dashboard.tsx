@@ -7,6 +7,7 @@ import {
     TouchableOpacity,
     RefreshControl,
     Image,
+    Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -21,6 +22,7 @@ import {
     subscribeToActiveBooking,
     getMechanicReviews,
     getCompletedBookings,
+    subscribeToMechanicScheduledBookings,
     Review,
 } from '@/services/firebase/firestore';
 import { COLORS, SIZES, CATEGORIES } from '@/constants/theme';
@@ -60,6 +62,7 @@ export default function MechanicDashboard() {
     const [activeBooking, setActiveBooking] = useState<any>(null);
     const [reviews, setReviews] = useState<Review[]>([]);
     const [completedJobs, setCompletedJobs] = useState<Booking[]>([]);
+    const [scheduledJobs, setScheduledJobs] = useState<Booking[]>([]);
 
     useEffect(() => {
         if (!user) return;
@@ -81,8 +84,12 @@ export default function MechanicDashboard() {
             }
         });
 
+        // Subscribe to scheduled bookings (real-time)
+        const unsubscribeScheduled = subscribeToMechanicScheduledBookings(user.id, setScheduledJobs);
+
         return () => {
             unsubscribeBooking();
+            unsubscribeScheduled();
         };
     }, [user]);
 
@@ -234,6 +241,83 @@ export default function MechanicDashboard() {
                         </TouchableOpacity>
                     </View>
                 </Card>
+
+                {/* Scheduled Jobs Section */}
+                {scheduledJobs.length > 0 && (
+                    <View style={styles.section}>
+                        <View style={styles.sectionHeader}>
+                            <Text style={styles.sectionTitle}>📅 Upcoming Scheduled Jobs</Text>
+                            <View style={[styles.countBadge, { backgroundColor: COLORS.info + '20' }]}>
+                                <Text style={[styles.countText, { color: COLORS.info }]}>{scheduledJobs.length}</Text>
+                            </View>
+                        </View>
+
+                        {scheduledJobs.map((job) => {
+                            const category = CATEGORIES.find((c) => c.id === job.category);
+                            const scheduledDateStr = job.scheduledDate
+                                ? (typeof (job.scheduledDate as any).toDate === 'function'
+                                    ? (job.scheduledDate as any).toDate().toLocaleDateString()
+                                    : job.scheduledDate.toLocaleDateString?.() || 'TBD')
+                                : 'TBD';
+
+                            return (
+                                <TouchableOpacity
+                                    key={job.id}
+                                    onPress={() => router.push({
+                                        pathname: '/(mechanic)/navigate',
+                                        params: { bookingId: job.id }
+                                    })}
+                                >
+                                    <Card style={[styles.jobHistoryCard, { borderLeftWidth: 4, borderLeftColor: COLORS.info }]}>
+                                        <View style={styles.jobHistoryHeader}>
+                                            <View style={[styles.jobCategoryIcon, { backgroundColor: (category?.color || COLORS.primary) + '20' }]}>
+                                                <Ionicons name={category?.icon as any || 'construct'} size={24} color={category?.color || COLORS.primary} />
+                                            </View>
+                                            <View style={styles.jobHistoryInfo}>
+                                                <Text style={styles.jobHistoryTitle}>{category?.name || 'Service'}</Text>
+                                                <Text style={styles.jobHistoryCustomer}>{job.customerName}</Text>
+                                            </View>
+                                            <View style={styles.jobHistoryRight}>
+                                                <Text style={styles.jobHistoryPrice}>PKR {job.price?.toLocaleString() || 0}</Text>
+                                            </View>
+                                        </View>
+                                        <View style={styles.scheduledInfoRow}>
+                                            <View style={styles.scheduledBadge}>
+                                                <Ionicons name="calendar" size={14} color={COLORS.info} />
+                                                <Text style={styles.scheduledBadgeText}>{scheduledDateStr}</Text>
+                                            </View>
+                                            {job.scheduledTime && (
+                                                <View style={styles.scheduledBadge}>
+                                                    <Ionicons name="time" size={14} color={COLORS.info} />
+                                                    <Text style={styles.scheduledBadgeText}>{job.scheduledTime}</Text>
+                                                </View>
+                                            )}
+                                        </View>
+                                        <View style={styles.actionRow}>
+                                            <TouchableOpacity
+                                                style={styles.actionButton}
+                                                onPress={() => job.customerPhone && Linking.openURL(`tel:${job.customerPhone}`)}
+                                            >
+                                                <Ionicons name="call" size={16} color={COLORS.success} />
+                                                <Text style={styles.actionButtonText}>Call</Text>
+                                            </TouchableOpacity>
+                                            <TouchableOpacity
+                                                style={[styles.actionButton, { backgroundColor: COLORS.primary + '15' }]}
+                                                onPress={() => router.push({
+                                                    pathname: '/(mechanic)/navigate',
+                                                    params: { bookingId: job.id }
+                                                })}
+                                            >
+                                                <Ionicons name="navigate" size={16} color={COLORS.primary} />
+                                                <Text style={[styles.actionButtonText, { color: COLORS.primary }]}>Navigate</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                    </Card>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </View>
+                )}
 
                 {/* Recent Reviews Section */}
                 {reviews.length > 0 && (
@@ -994,5 +1078,57 @@ const styles = StyleSheet.create({
         fontSize: SIZES.base,
         fontWeight: 'bold',
         color: COLORS.white,
+    },
+    // Scheduled Jobs section styles
+    countBadge: {
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
+    },
+    countText: {
+        fontSize: SIZES.sm,
+        fontWeight: 'bold',
+    },
+    scheduledInfoRow: {
+        flexDirection: 'row',
+        gap: 12,
+        marginTop: 12,
+        paddingTop: 12,
+        borderTopWidth: 1,
+        borderTopColor: COLORS.border,
+    },
+    scheduledBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: COLORS.info + '15',
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 8,
+    },
+    scheduledBadgeText: {
+        fontSize: SIZES.sm,
+        color: COLORS.info,
+        fontWeight: '500',
+    },
+    actionRow: {
+        flexDirection: 'row',
+        gap: 10,
+        marginTop: 12,
+    },
+    actionButton: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        backgroundColor: COLORS.success + '15',
+        paddingVertical: 10,
+        borderRadius: 8,
+    },
+    actionButtonText: {
+        fontSize: SIZES.sm,
+        fontWeight: '600',
+        color: COLORS.success,
     },
 });

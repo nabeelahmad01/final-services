@@ -152,6 +152,28 @@ export const FloatingServiceRequest: React.FC<FloatingServiceRequestProps> = ({
                                 <Text style={styles.categoryText}>{category?.name || 'Service'}</Text>
                             </View>
                         </View>
+
+                        {/* Immediate vs Scheduled Badge */}
+                        <View style={styles.typeBadgeRow}>
+                            {currentRequest.isScheduled ? (
+                                <View style={[styles.typeBadge, { backgroundColor: COLORS.info + '20' }]}>
+                                    <Ionicons name="calendar" size={12} color={COLORS.info} />
+                                    <Text style={[styles.typeBadgeText, { color: COLORS.info }]}>
+                                        Scheduled: {currentRequest.scheduledDate ? (
+                                            typeof (currentRequest.scheduledDate as any).toDate === 'function'
+                                                ? (currentRequest.scheduledDate as any).toDate().toLocaleDateString()
+                                                : (currentRequest.scheduledDate as Date).toLocaleDateString?.() || 'TBD'
+                                        ) : 'TBD'} {currentRequest.scheduledTime || ''}
+                                    </Text>
+                                </View>
+                            ) : (
+                                <View style={[styles.typeBadge, { backgroundColor: COLORS.warning + '20' }]}>
+                                    <Ionicons name="flash" size={12} color={COLORS.warning} />
+                                    <Text style={[styles.typeBadgeText, { color: COLORS.warning }]}>Immediate Request</Text>
+                                </View>
+                            )}
+                        </View>
+
                         <Text style={styles.description} numberOfLines={1}>
                             {currentRequest.description}
                         </Text>
@@ -327,5 +349,21 @@ const styles = StyleSheet.create({
         fontSize: SIZES.sm,
         fontWeight: 'bold',
         color: COLORS.white,
+    },
+    typeBadgeRow: {
+        marginBottom: 4,
+    },
+    typeBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 6,
+        alignSelf: 'flex-start',
+    },
+    typeBadgeText: {
+        fontSize: 10,
+        fontWeight: '600',
     },
 });

@@ -53,11 +53,11 @@ export const subscribeToServiceRequests = (
     category: ServiceCategory,
     callback: (requests: ServiceRequest[]) => void
 ) => {
-    // Only get requests from last 10 minutes (live requests only)
+    // 1. Live Requests: Only get requests from last 10 minutes
     const tenMinutesAgo = new Date();
     tenMinutesAgo.setMinutes(tenMinutesAgo.getMinutes() - 10);
 
-    const q = query(
+    const qLive = query(
         collection(firestore, 'serviceRequests'),
         where('category', '==', category),
         where('status', '==', 'pending'),
@@ -65,14 +65,50 @@ export const subscribeToServiceRequests = (
         orderBy('createdAt', 'desc')
     );
 
-    return onSnapshot(q, (snapshot) => {
-        const requests = snapshot.docs.map(doc => ({
+    // 2. Scheduled Requests: Get all pending scheduled requests
+    const qScheduled = query(
+        collection(firestore, 'serviceRequests'),
+        where('category', '==', category),
+        where('status', '==', 'pending'),
+        where('isScheduled', '==', true),
+        orderBy('createdAt', 'desc')
+    );
+
+    let liveRequests: ServiceRequest[] = [];
+    let scheduledRequests: ServiceRequest[] = [];
+
+    const mergeAndCallback = () => {
+        const allRequests = [...scheduledRequests, ...liveRequests];
+        // Deduplicate by ID
+        const uniqueRequests = Array.from(new Map(allRequests.map(item => [item.id, item])).values());
+        // Sort by creation time desc
+        uniqueRequests.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+        
+        callback(uniqueRequests);
+    };
+
+    const unsubLive = onSnapshot(qLive, (snapshot) => {
+        liveRequests = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data(),
             createdAt: doc.data().createdAt.toDate(),
         })) as ServiceRequest[];
-        callback(requests);
+        mergeAndCallback();
     });
+
+    const unsubScheduled = onSnapshot(qScheduled, (snapshot) => {
+        scheduledRequests = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            createdAt: doc.data().createdAt.toDate(),
+        })) as ServiceRequest[];
+        mergeAndCallback();
+    });
+
+    return () => {
+        unsubLive();
+        unsubScheduled();
+    };
 };
 
 export const updateServiceRequestStatus = async (
@@ -229,6 +265,53 @@ export const getCompletedBookings = async (mechanicId: string, limitCount: numbe
             startedAt: data.startedAt?.toDate() || new Date(),
             completedAt: data.completedAt?.toDate() || new Date(),
         } as Booking;
+    });
+};
+
+// Get scheduled bookings for a mechanic (upcoming jobs)
+export const getMechanicScheduledBookings = async (mechanicId: string): Promise<Booking[]> => {
+    const q = query(
+        collection(firestore, 'bookings'),
+        where('mechanicId', '==', mechanicId),
+        where('status', '==', 'scheduled'),
+        orderBy('startedAt', 'desc')
+    );
+
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+            id: doc.id,
+            ...data,
+            startedAt: data.startedAt?.toDate() || new Date(),
+            scheduledDate: data.scheduledDate?.toDate(),
+        } as Booking;
+    });
+};
+
+// Subscribe to mechanic's scheduled bookings (real-time)
+export const subscribeToMechanicScheduledBookings = (
+    mechanicId: string,
+    callback: (bookings: Booking[]) => void
+) => {
+    const q = query(
+        collection(firestore, 'bookings'),
+        where('mechanicId', '==', mechanicId),
+        where('status', '==', 'scheduled'),
+        orderBy('startedAt', 'desc')
+    );
+
+    return onSnapshot(q, (snapshot) => {
+        const bookings = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                ...data,
+                startedAt: data.startedAt?.toDate() || new Date(),
+                scheduledDate: data.scheduledDate?.toDate(),
+            } as Booking;
+        });
+        callback(bookings);
     });
 };
 
@@ -700,3 +783,209 @@ export const endCallSession = async (callId: string) => {
     });
 };
 
+// ==================== FAVORITES ====================
+
+import { FavoriteMechanic } from '@/types';
+
+export const addToFavorites = async (
+    customerId: string,
+    mechanic: Mechanic
+): Promise<string> => {
+    const favoriteData = {
+        customerId,
+        mechanicId: mechanic.id,
+        mechanicName: mechanic.name,
+        mechanicPhone: mechanic.phone,
+        mechanicPhoto: mechanic.profilePic || null,
+        mechanicRating: mechanic.rating,
+        mechanicTotalRatings: mechanic.totalRatings,
+        categories: mechanic.categories,
+        completedJobs: mechanic.completedJobs,
+        addedAt: Timestamp.now(),
+    };
+
+    const docRef = await addDoc(collection(firestore, 'favorites'), favoriteData);
+    return docRef.id;
+};
+
+export const removeFromFavorites = async (
+    customerId: string,
+    mechanicId: string
+): Promise<void> => {
+    const q = query(
+        collection(firestore, 'favorites'),
+        where('customerId', '==', customerId),
+        where('mechanicId', '==', mechanicId)
+    );
+
+    const snapshot = await getDocs(q);
+    const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+    await Promise.all(deletePromises);
+};
+
+export const getFavorites = async (customerId: string): Promise<FavoriteMechanic[]> => {
+    const q = query(
+        collection(firestore, 'favorites'),
+        where('customerId', '==', customerId),
+        orderBy('addedAt', 'desc')
+    );
+
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        addedAt: doc.data().addedAt?.toDate() || new Date(),
+    })) as FavoriteMechanic[];
+};
+
+export const subscribeToFavorites = (
+    customerId: string,
+    callback: (favorites: FavoriteMechanic[]) => void
+) => {
+    const q = query(
+        collection(firestore, 'favorites'),
+        where('customerId', '==', customerId),
+        orderBy('addedAt', 'desc')
+    );
+
+    return onSnapshot(q, (snapshot) => {
+        const favorites = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            addedAt: doc.data().addedAt?.toDate() || new Date(),
+        })) as FavoriteMechanic[];
+        callback(favorites);
+    });
+};
+
+export const isMechanicFavorite = async (
+    customerId: string,
+    mechanicId: string
+): Promise<boolean> => {
+    const q = query(
+        collection(firestore, 'favorites'),
+        where('customerId', '==', customerId),
+        where('mechanicId', '==', mechanicId),
+        limit(1)
+    );
+
+    const snapshot = await getDocs(q);
+    return !snapshot.empty;
+};
+
+// ==================== CUSTOMER BOOKINGS ====================
+
+export const getCustomerBookings = async (
+    customerId: string,
+    status?: Booking['status'][]
+): Promise<Booking[]> => {
+    let q;
+    if (status && status.length > 0) {
+        q = query(
+            collection(firestore, 'bookings'),
+            where('customerId', '==', customerId),
+            where('status', 'in', status),
+            orderBy('startedAt', 'desc'),
+            limit(50)
+        );
+    } else {
+        q = query(
+            collection(firestore, 'bookings'),
+            where('customerId', '==', customerId),
+            orderBy('startedAt', 'desc'),
+            limit(50)
+        );
+    }
+
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+            id: doc.id,
+            ...data,
+            startedAt: data.startedAt?.toDate() || new Date(),
+            completedAt: data.completedAt?.toDate(),
+            scheduledDate: data.scheduledDate?.toDate(),
+        } as Booking;
+    });
+};
+
+export const subscribeToCustomerBookings = (
+    customerId: string,
+    callback: (bookings: Booking[]) => void
+) => {
+    const q = query(
+        collection(firestore, 'bookings'),
+        where('customerId', '==', customerId),
+        orderBy('startedAt', 'desc'),
+        limit(50)
+    );
+
+    return onSnapshot(q, (snapshot) => {
+        const bookings = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                ...data,
+                startedAt: data.startedAt?.toDate() || new Date(),
+                completedAt: data.completedAt?.toDate(),
+                scheduledDate: data.scheduledDate?.toDate(),
+            } as Booking;
+        });
+        callback(bookings);
+    });
+};
+
+// ==================== SCHEDULED BOOKINGS ====================
+
+export const createScheduledBooking = async (
+    bookingData: Omit<Booking, 'id' | 'startedAt'>
+): Promise<string> => {
+    const docRef = await addDoc(collection(firestore, 'bookings'), {
+        ...bookingData,
+        status: 'scheduled',
+        isScheduled: true,
+        scheduledDate: bookingData.scheduledDate ? Timestamp.fromDate(bookingData.scheduledDate) : null,
+        startedAt: Timestamp.now(),
+    });
+    return docRef.id;
+};
+
+export const rescheduleBooking = async (
+    bookingId: string,
+    newDate: Date,
+    newTime: string
+): Promise<void> => {
+    await updateDoc(doc(firestore, 'bookings', bookingId), {
+        scheduledDate: Timestamp.fromDate(newDate),
+        scheduledTime: newTime,
+        updatedAt: Timestamp.now(),
+    });
+};
+
+export const cancelBooking = async (bookingId: string): Promise<void> => {
+    await updateDoc(doc(firestore, 'bookings', bookingId), {
+        status: 'cancelled',
+        cancelledAt: Timestamp.now(),
+    });
+};
+
+export const getScheduledBookings = async (customerId: string): Promise<Booking[]> => {
+    const q = query(
+        collection(firestore, 'bookings'),
+        where('customerId', '==', customerId),
+        where('status', '==', 'scheduled'),
+        orderBy('scheduledDate', 'asc')
+    );
+
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+            id: doc.id,
+            ...data,
+            startedAt: data.startedAt?.toDate() || new Date(),
+            scheduledDate: data.scheduledDate?.toDate(),
+        } as Booking;
+    });
+};

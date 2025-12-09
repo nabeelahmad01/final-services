@@ -9,6 +9,8 @@ interface ProposalCardProps {
     onAccept: () => void;
     onDecline: () => void;
     isProcessing?: boolean;
+    isFavorite?: boolean;
+    onToggleFavorite?: () => void;
 }
 
 export const ProposalCard: React.FC<ProposalCardProps> = ({
@@ -16,6 +18,8 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
     onAccept,
     onDecline,
     isProcessing = false,
+    isFavorite = false,
+    onToggleFavorite,
 }) => {
     return (
         <View style={styles.card}>
@@ -49,8 +53,19 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
 
                 {/* Details */}
                 <View style={styles.detailsContainer}>
-                    {/* Name */}
-                    <Text style={styles.mechanicName}>{proposal.mechanicName}</Text>
+                    {/* Name Row with Favorite Toggle */}
+                    <View style={styles.nameRow}>
+                        <Text style={styles.mechanicName}>{proposal.mechanicName}</Text>
+                        {onToggleFavorite && (
+                            <TouchableOpacity onPress={onToggleFavorite} style={styles.favoriteButton}>
+                                <Ionicons
+                                    name={isFavorite ? "heart" : "heart-outline"}
+                                    size={20}
+                                    color={isFavorite ? COLORS.danger : COLORS.textSecondary}
+                                />
+                            </TouchableOpacity>
+                        )}
+                    </View>
 
                     {/* Rating */}
                     <View style={styles.ratingRow}>
@@ -170,11 +185,19 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
     },
+    nameRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 4,
+    },
+    favoriteButton: {
+        padding: 4,
+    },
     mechanicName: {
         fontSize: SIZES.lg,
         fontWeight: 'bold',
         color: COLORS.text,
-        marginBottom: 4,
     },
     ratingRow: {
         flexDirection: 'row',
