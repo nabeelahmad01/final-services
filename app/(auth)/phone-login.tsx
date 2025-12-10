@@ -16,7 +16,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SIZES, FONTS } from '@/constants/theme';
-import { sendOTP } from '@/services/firebase/phoneAuth';
+import { sendOTP, isDevMode } from '@/services/firebase/phoneAuth';
 import { useModal, showErrorModal } from '@/utils/modalService';
 
 export default function PhoneLoginScreen() {

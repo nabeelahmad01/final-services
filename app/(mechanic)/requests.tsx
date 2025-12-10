@@ -126,6 +126,34 @@ export default function MechanicRequests() {
         }
     };
 
+    const handleStartJob = async (booking: Booking) => {
+        showConfirmModal(
+            showModal,
+            'Start Job',
+            `Are you ready to start work for ${booking.customerName}?\n\nThis will mark the job as active.`,
+            async () => {
+                try {
+                    const { updateBooking } = require('@/services/firebase/firestore');
+                    await updateBooking(booking.id, {
+                        status: 'ongoing',
+                    });
+
+                    showSuccessModal(
+                        showModal,
+                        'Job Started!',
+                        'You can now navigate to the customer. The booking is now active.',
+                        () => router.push('/(mechanic)/active-job')
+                    );
+                } catch (error: any) {
+                    showErrorModal(showModal, 'Error', error.message);
+                }
+            },
+            undefined,
+            'Start Job',
+            'Not Yet'
+        );
+    };
+
     const onRefresh = async () => {
         setRefreshing(true);
         setTimeout(() => setRefreshing(false), 1000);
@@ -271,6 +299,15 @@ export default function MechanicRequests() {
                                         <Text style={styles.navigateBtnText}>Navigate</Text>
                                     </TouchableOpacity>
                                 </View>
+
+                                {/* Start Job Button */}
+                                <TouchableOpacity
+                                    style={styles.startJobBtn}
+                                    onPress={() => handleStartJob(booking)}
+                                >
+                                    <Ionicons name="play-circle" size={20} color={COLORS.white} />
+                                    <Text style={styles.startJobBtnText}>Start Job</Text>
+                                </TouchableOpacity>
                             </Card>
                         );
                     })}
@@ -575,6 +612,21 @@ const styles = StyleSheet.create({
     navigateBtnText: {
         fontSize: SIZES.base,
         fontWeight: '600',
+        color: COLORS.white,
+    },
+    startJobBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        backgroundColor: COLORS.success,
+        paddingVertical: 14,
+        borderRadius: 10,
+        marginTop: 12,
+    },
+    startJobBtnText: {
+        fontSize: SIZES.base,
+        fontWeight: 'bold',
         color: COLORS.white,
     },
 });

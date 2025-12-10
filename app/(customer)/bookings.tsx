@@ -117,7 +117,7 @@ export default function Bookings() {
 
                 {/* Mechanic Info */}
                 <View style={styles.mechanicRow}>
-                    <Avatar name={booking.mechanicName || 'M'} uri={booking.mechanicPhoto} size={40} />
+                    <Avatar name={booking.mechanicName || 'M'} uri={booking.mechanicPhoto ?? undefined} size={40} />
                     <View style={styles.mechanicInfo}>
                         <Text style={styles.mechanicName}>{booking.mechanicName || 'Mechanic'}</Text>
                         {booking.mechanicRating && (
@@ -156,6 +156,14 @@ export default function Bookings() {
                         {booking.customerLocation?.address || 'Location not set'}
                     </Text>
                 </View>
+
+                {/* Rate Now badge for completed bookings without review */}
+                {booking.status === 'completed' && !booking.isReviewed && (
+                    <View style={styles.rateNowBadge}>
+                        <Ionicons name="star-outline" size={14} color={COLORS.warning} />
+                        <Text style={styles.rateNowText}>Tap to rate the mechanic</Text>
+                    </View>
+                )}
             </Card>
         );
     };
@@ -433,5 +441,20 @@ const styles = StyleSheet.create({
         fontFamily: FONTS.regular,
         color: COLORS.textSecondary,
         flex: 1,
+    },
+    rateNowBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: COLORS.warning + '15',
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        borderRadius: 8,
+        marginTop: 12,
+    },
+    rateNowText: {
+        fontSize: SIZES.sm,
+        fontFamily: FONTS.semiBold,
+        color: COLORS.warning,
     },
 });

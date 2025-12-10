@@ -188,12 +188,58 @@ export const updateProposalStatus = async (
 
 // Bookings
 export const createBooking = async (booking: Omit<Booking, 'id' | 'startedAt'>) => {
-    const docRef = await addDoc(collection(firestore, 'bookings'), {
-        ...booking,
+    // Build booking data, filtering out undefined values (Firestore doesn't accept undefined)
+    const bookingData: Record<string, any> = {
+        customerId: booking.customerId,
+        mechanicId: booking.mechanicId,
+        requestId: booking.requestId,
+        proposalId: booking.proposalId,
+        category: booking.category,
+        customerLocation: booking.customerLocation,
+        price: booking.price,
+        estimatedTime: booking.estimatedTime,
+        status: booking.status,
         startedAt: Timestamp.now(),
-    });
+    };
+
+    // Add optional fields only if they have values
+    if (booking.customerName) bookingData.customerName = booking.customerName;
+    if (booking.customerPhone) bookingData.customerPhone = booking.customerPhone;
+    if (booking.customerPhoto) bookingData.customerPhoto = booking.customerPhoto;
+    if (booking.mechanicName) bookingData.mechanicName = booking.mechanicName;
+    if (booking.mechanicPhone !== undefined) bookingData.mechanicPhone = booking.mechanicPhone;
+    if (booking.mechanicPhoto !== undefined) bookingData.mechanicPhoto = booking.mechanicPhoto;
+    if (booking.mechanicRating !== undefined) bookingData.mechanicRating = booking.mechanicRating;
+    if (booking.mechanicLocation) bookingData.mechanicLocation = booking.mechanicLocation;
+    
+    // Handle scheduled booking fields
+    if (booking.isScheduled !== undefined) bookingData.isScheduled = booking.isScheduled;
+    if (booking.scheduledDate) {
+        // Check if it's already a Firestore Timestamp
+        if (typeof (booking.scheduledDate as any).toDate === 'function') {
+            // Already a Timestamp, use as-is
+            bookingData.scheduledDate = booking.scheduledDate;
+        } else if (booking.scheduledDate instanceof Date) {
+            // It's a Date object, convert to Timestamp
+            bookingData.scheduledDate = Timestamp.fromDate(booking.scheduledDate);
+        } else {
+            // Try to parse as date string/number
+            try {
+                const dateValue = new Date(booking.scheduledDate as any);
+                if (!isNaN(dateValue.getTime())) {
+                    bookingData.scheduledDate = Timestamp.fromDate(dateValue);
+                }
+            } catch (e) {
+                console.warn('Could not parse scheduledDate:', booking.scheduledDate);
+            }
+        }
+    }
+    if (booking.scheduledTime) bookingData.scheduledTime = booking.scheduledTime;
+
+    const docRef = await addDoc(collection(firestore, 'bookings'), bookingData);
     return docRef.id;
 };
+
 
 export const getBooking = async (id: string): Promise<Booking | null> => {
     const docSnap = await getDoc(doc(firestore, 'bookings', id));

@@ -327,6 +327,49 @@ export default function BookingDetails() {
                         />
                     </>
                 )}
+
+                {/* Rate Mechanic - for completed bookings that haven't been reviewed */}
+                {booking.status === 'completed' && !booking.isReviewed && (
+                    <Button
+                        title="Rate Mechanic"
+                        onPress={() => router.push({
+                            pathname: '/(customer)/rate-mechanic',
+                            params: {
+                                bookingId: booking.id,
+                                mechanicId: booking.mechanicId,
+                                mechanicName: booking.mechanicName || 'Mechanic',
+                                mechanicPhoto: booking.mechanicPhoto || '',
+                            }
+                        })}
+                        icon={<Ionicons name="star" size={20} color={COLORS.white} />}
+                        style={styles.actionButton}
+                    />
+                )}
+
+                {/* Already reviewed indicator */}
+                {booking.status === 'completed' && booking.isReviewed && (
+                    <Card style={styles.reviewedCard}>
+                        <View style={styles.reviewedContent}>
+                            <Ionicons name="checkmark-circle" size={24} color={COLORS.success} />
+                            <View>
+                                <Text style={styles.reviewedTitle}>You rated this service</Text>
+                                <View style={styles.reviewedRating}>
+                                    {[1, 2, 3, 4, 5].map((star) => (
+                                        <Ionicons
+                                            key={star}
+                                            name={star <= (booking.rating || 0) ? 'star' : 'star-outline'}
+                                            size={18}
+                                            color={COLORS.warning}
+                                        />
+                                    ))}
+                                </View>
+                            </View>
+                        </View>
+                        {booking.reviewComment && (
+                            <Text style={styles.reviewedComment}>"{booking.reviewComment}"</Text>
+                        )}
+                    </Card>
+                )}
             </ScrollView>
         </SafeAreaView>
     );
@@ -516,5 +559,34 @@ const styles = StyleSheet.create({
     },
     cancelButton: {
         borderColor: COLORS.danger,
+    },
+    reviewedCard: {
+        padding: SIZES.padding,
+        backgroundColor: COLORS.success + '10',
+        borderWidth: 1,
+        borderColor: COLORS.success + '30',
+    },
+    reviewedContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    reviewedTitle: {
+        fontSize: SIZES.base,
+        fontWeight: '600',
+        fontFamily: FONTS.semiBold,
+        color: COLORS.text,
+    },
+    reviewedRating: {
+        flexDirection: 'row',
+        gap: 2,
+        marginTop: 4,
+    },
+    reviewedComment: {
+        fontSize: SIZES.sm,
+        fontFamily: FONTS.regular,
+        color: COLORS.textSecondary,
+        fontStyle: 'italic',
+        marginTop: 12,
     },
 });

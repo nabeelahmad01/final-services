@@ -1,23 +1,69 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '@/stores/authStore';
 import { Card, EmptyState } from '@/components';
 import { Rating } from '@/components/ui/Rating';
-import { COLORS, SIZES, FONTS } from '@/constants/theme';
+import { Avatar } from '@/components/shared/Avatar';
+import { COLORS, SIZES, FONTS, CATEGORIES } from '@/constants/theme';
+import { getMechanicReviews } from '@/services/firebase/reviewService';
+import { Review } from '@/types';
 
 export default function Reviews() {
     const router = useRouter();
     const { user } = useAuthStore();
 
-    // TODO: Fetch reviews from Firestore
-    const [reviews, setReviews] = useState<any[]>([]);
+    const [reviews, setReviews] = useState<Review[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    // Fetch reviews from Firestore
+    useEffect(() => {
+        if (!user?.id) return;
+        
+        const fetchReviews = async () => {
+            setLoading(true);
+            try {
+                const fetchedReviews = await getMechanicReviews(user.id, 50);
+                setReviews(fetchedReviews);
+            } catch (error) {
+                console.error('Error fetching reviews:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        
+        fetchReviews();
+    }, [user?.id]);
 
     const averageRating = reviews.length > 0
         ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
         : 0;
+
+    // Format date for display
+    const formatDate = (date: Date): string => {
+        return date.toLocaleDateString('en-PK', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+        });
+    };
+
+    if (loading) {
+        return (
+            <SafeAreaView style={styles.container}>
+                <View style={styles.header}>
+                    <Text style={styles.headerTitle}>My Reviews</Text>
+                </View>
+                <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color={COLORS.primary} />
+                    <Text style={styles.loadingText}>Loading reviews...</Text>
+                </View>
+            </SafeAreaView>
+        );
+    }
+
 
     return (
         <SafeAreaView style={styles.container}>
@@ -56,7 +102,7 @@ export default function Reviews() {
                                     </View>
                                     <View>
                                         <Text style={styles.customerName}>{review.customerName}</Text>
-                                        <Text style={styles.reviewDate}>{review.date}</Text>
+                                        <Text style={styles.reviewDate}>{formatDate(review.createdAt)}</Text>
                                     </View>
                                 </View>
                                 <Rating rating={review.rating} size={16} />
@@ -68,8 +114,8 @@ export default function Reviews() {
 
                             <View style={styles.reviewFooter}>
                                 <View style={styles.jobInfo}>
-                                    <Ionicons name="construct" size={16} color={COLORS.textSecondary} />
-                                    <Text style={styles.jobCategory}>{review.category}</Text>
+                                    <Ionicons name="checkmark-circle" size={16} color={COLORS.success} />
+                                    <Text style={styles.jobCategory}>Verified Review</Text>
                                 </View>
                             </View>
                         </Card>
@@ -184,6 +230,17 @@ const styles = StyleSheet.create({
     jobCategory: {
         fontSize: SIZES.sm,
         fontFamily: FONTS.medium,
+        color: COLORS.textSecondary,
+    },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 12,
+    },
+    loadingText: {
+        fontSize: SIZES.base,
+        fontFamily: FONTS.regular,
         color: COLORS.textSecondary,
     },
 });
