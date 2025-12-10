@@ -11,32 +11,39 @@
 -keep class com.swmansion.reanimated.** { *; }
 -keep class com.facebook.react.turbomodule.** { *; }
 
-# Add any project specific keep options here:
+# React Native
+-keep class com.facebook.react.** { *; }
+-keep class com.facebook.hermes.** { *; }
+-keep class com.facebook.jni.** { *; }
 
-# Keep Firebase classes
+# Firebase
 -keep class com.google.firebase.** { *; }
 -keep class com.google.android.gms.** { *; }
 -dontwarn com.google.firebase.**
+-dontwarn com.google.android.gms.**
 
-# Keep React Native
--keep class com.facebook.react.** { *; }
--keep class com.facebook.hermes.** { *; }
-
-# Keep Agora SDK
+# Agora
 -keep class io.agora.** { *; }
 -dontwarn io.agora.**
 
-# Keep Expo modules
+# Expo
 -keep class expo.modules.** { *; }
+-dontwarn expo.modules.**
 
-# Remove logging in production
--assumenosideeffects class android.util.Log {
-    public static *** d(...);
-    public static *** v(...);
-    public static *** i(...);
-}
+# Okhttp
+-dontwarn okhttp3.**
+-dontwarn okio.**
+-keep class okhttp3.** { *; }
+-keep class okio.** { *; }
+
+# Gson
+-keep class com.google.gson.** { *; }
+-keepattributes Signature
+-keepattributes *Annotation*
 
 # Keep native methods
--keepclasseswithmembernames class * {
+-keepclassmembers class * {
     native <methods>;
 }
+
+# Add any project specific keep options here:
