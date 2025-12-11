@@ -127,20 +127,21 @@ export const initializeAgoraEngine = async (): Promise<IRtcEngine | null> => {
         
         // Make sure we can hear remote users
         agoraEngine.muteAllRemoteAudioStreams(false);
+        agoraEngine.muteLocalAudioStream(false);
         
         // Adjust volumes to max
-        agoraEngine.adjustRecordingSignalVolume(100); // Microphone volume
-        agoraEngine.adjustPlaybackSignalVolume(100); // Speaker volume
+        agoraEngine.adjustRecordingSignalVolume(400); // Microphone volume boosted
+        agoraEngine.adjustPlaybackSignalVolume(400); // Speaker volume boosted
         agoraEngine.adjustAudioMixingVolume(100);
         
-        // Set default audio route to earpiece (like normal phone call)
-        agoraEngine.setDefaultAudioRouteToSpeakerphone(false);
-        agoraEngine.setEnableSpeakerphone(false);
+        // IMPORTANT: Set default audio route to SPEAKER so users can hear
+        agoraEngine.setDefaultAudioRouteToSpeakerphone(true);
+        agoraEngine.setEnableSpeakerphone(true);
 
         isInitialized = true;
         console.log('✅ Agora Engine initialized successfully');
         console.log('📱 App ID:', AGORA_APP_ID.substring(0, 8) + '...');
-        console.log('🎤 Audio enabled, volumes set to 100%');
+        console.log('🎤 Audio enabled, volumes boosted, SPEAKER enabled');
 
         return agoraEngine;
     } catch (error) {
@@ -242,9 +243,12 @@ export const joinVoiceCall = async (
         engine.muteLocalAudioStream(false);
         engine.muteAllRemoteAudioStreams(false);
         
-        // Adjust volumes
-        engine.adjustRecordingSignalVolume(100);
-        engine.adjustPlaybackSignalVolume(100);
+        // Boost volumes for clear audio
+        engine.adjustRecordingSignalVolume(400);
+        engine.adjustPlaybackSignalVolume(400);
+        
+        // Enable speaker for loud and clear audio
+        engine.setEnableSpeakerphone(true);
 
         // Join the channel with proper options
         const result = engine.joinChannel(
@@ -260,7 +264,7 @@ export const joinVoiceCall = async (
 
         console.log(`✅ Join channel result: ${result}`);
         console.log(`📞 Channel: ${channelName}, UID: ${uid}`);
-        console.log(`🎤 Local audio enabled, remote audio unmuted`);
+        console.log(`🎤 Local audio enabled, SPEAKER ON, volumes boosted`);
         
         return true;
     } catch (error) {
