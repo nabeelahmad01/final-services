@@ -136,7 +136,12 @@ export const initializeAgoraEngine = async (): Promise<IRtcEngine | null> => {
         
         // IMPORTANT: Set default audio route to SPEAKER so users can hear
         agoraEngine.setDefaultAudioRouteToSpeakerphone(true);
-        agoraEngine.setEnableSpeakerphone(true);
+        
+        // Enforce speakerphone with a small delay to ensure it takes effect
+        setTimeout(() => {
+            agoraEngine?.setEnableSpeakerphone(true);
+            console.log('Force enabled speakerphone after init');
+        }, 1000);
 
         isInitialized = true;
         console.log('✅ Agora Engine initialized successfully');

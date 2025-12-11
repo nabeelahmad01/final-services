@@ -43,37 +43,19 @@ export default function RateMechanicScreen() {
 
         setSubmitting(true);
         try {
-            const { addDoc, collection, doc, updateDoc, getDoc } = require('firebase/firestore');
-            const { firestore } = require('@/services/firebase/config');
-
-            // Create rating document
-            await addDoc(collection(firestore, 'ratings'), {
+            // Use the proper addReview function from reviewService
+            // This creates a review document AND updates the booking with isReviewed, rating, reviewComment
+            const { addReview } = require('@/services/firebase/reviewService');
+            
+            await addReview(
                 bookingId,
-                customerId: user?.id,
                 mechanicId,
+                user?.id || '',
+                user?.name || 'Customer',
+                undefined, // customerPhoto - optional
                 rating,
-                feedback: feedback.trim() || null,
-                createdAt: new Date(),
-            });
-
-            // Update mechanic's rating
-            const mechanicRef = doc(firestore, 'mechanics', mechanicId);
-            const mechanicSnap = await getDoc(mechanicRef);
-
-            if (mechanicSnap.exists()) {
-                const mechanicData = mechanicSnap.data();
-                const currentRating = mechanicData.rating || 0;
-                const totalRatings = mechanicData.totalRatings || 0;
-
-                // Calculate new average
-                const newTotalRatings = totalRatings + 1;
-                const newRating = ((currentRating * totalRatings) + rating) / newTotalRatings;
-
-                await updateDoc(mechanicRef, {
-                    rating: newRating,
-                    totalRatings: newTotalRatings,
-                });
-            }
+                feedback.trim()
+            );
 
             showSuccessModal(
                 showModal,
@@ -82,6 +64,7 @@ export default function RateMechanicScreen() {
                 () => router.replace('/(customer)/home')
             );
         } catch (error: any) {
+            console.error('Error submitting review:', error);
             showErrorModal(showModal, 'Error', error.message || 'Failed to submit rating');
         } finally {
             setSubmitting(false);
