@@ -41,7 +41,10 @@
           "apiKey": "AIzaSyBhYMnd2kw3IravpOpUScd3XC0LXUS2hlY"
         }
       },
-      "versionCode": 1
+      "versionCode": 1,
+      "ndk": {
+        "abiFilters": ["arm64-v8a"]
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png",
