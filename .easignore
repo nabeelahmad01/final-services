@@ -1,0 +1,16 @@
+# Ignore pre-built native folders - let EAS generate fresh
+android/
+ios/
+
+# Build artifacts
+android/build
+android/app/build
+
+# Temp files
+*.log
+build_log.txt
+build_output.txt
+gradle_error.log
+
+# Node modules are handled by EAS separately
+# don't include node_modules here as EAS needs them
