@@ -319,17 +319,27 @@ export default function MechanicDashboard() {
                     </View>
                 )}
 
-                {/* Recent Reviews Section */}
-                {reviews.length > 0 && (
-                    <View style={styles.section}>
-                        <View style={styles.sectionHeader}>
-                            <Text style={styles.sectionTitle}>Recent Reviews</Text>
+                {/* Recent Reviews Section - Always show */}
+                <View style={styles.section}>
+                    <View style={styles.sectionHeader}>
+                        <Text style={styles.sectionTitle}>Recent Reviews</Text>
+                        {reviews.length > 0 && (
                             <TouchableOpacity onPress={() => router.push('/(mechanic)/reviews')}>
                                 <Text style={styles.seeAllText}>See All</Text>
                             </TouchableOpacity>
-                        </View>
+                        )}
+                    </View>
 
-                        {reviews.map((review) => (
+                    {reviews.length === 0 ? (
+                        <Card style={styles.emptyReviewCard}>
+                            <Ionicons name="chatbubbles-outline" size={40} color={COLORS.textSecondary} />
+                            <Text style={styles.emptyReviewTitle}>No Reviews Yet</Text>
+                            <Text style={styles.emptyReviewText}>
+                                Complete jobs to get reviews from customers
+                            </Text>
+                        </Card>
+                    ) : (
+                        reviews.map((review) => (
                             <Card key={review.id} style={styles.reviewCard}>
                                 <View style={styles.reviewHeader}>
                                     <View style={styles.reviewerInfo}>
@@ -362,9 +372,9 @@ export default function MechanicDashboard() {
                                     <Text style={styles.reviewComment}>{review.comment}</Text>
                                 )}
                             </Card>
-                        ))}
-                    </View>
-                )}
+                        ))
+                    )}
+                </View>
 
                 {/* Job History - Show completed jobs */}
                 {completedJobs.length > 0 && (
@@ -727,6 +737,22 @@ const styles = StyleSheet.create({
     reviewCard: {
         marginBottom: 12,
         padding: 14,
+    },
+    emptyReviewCard: {
+        alignItems: 'center',
+        padding: 24,
+        gap: 8,
+    },
+    emptyReviewTitle: {
+        fontSize: SIZES.base,
+        fontWeight: '600',
+        color: COLORS.text,
+        marginTop: 8,
+    },
+    emptyReviewText: {
+        fontSize: SIZES.sm,
+        color: COLORS.textSecondary,
+        textAlign: 'center',
     },
     reviewHeader: {
         flexDirection: 'row',

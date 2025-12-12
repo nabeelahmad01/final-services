@@ -606,19 +606,52 @@ export interface Review {
 }
 
 export const getMechanicReviews = async (mechanicId: string, limitCount: number = 5): Promise<Review[]> => {
-    const q = query(
-        collection(firestore, 'reviews'),
-        where('mechanicId', '==', mechanicId),
-        orderBy('createdAt', 'desc'),
-        limit(limitCount)
-    );
+    try {
+        // Try with orderBy first (requires composite index)
+        const q = query(
+            collection(firestore, 'reviews'),
+            where('mechanicId', '==', mechanicId),
+            orderBy('createdAt', 'desc'),
+            limit(limitCount)
+        );
 
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate() || new Date(),
-    })) as Review[];
+        const snapshot = await getDocs(q);
+        console.log(`📝 Found ${snapshot.docs.length} reviews for mechanic ${mechanicId}`);
+        
+        return snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            createdAt: doc.data().createdAt?.toDate() || new Date(),
+        })) as Review[];
+    } catch (error: any) {
+        console.error('❌ Error fetching reviews with orderBy, trying fallback:', error.message);
+        
+        // Fallback: Query without orderBy (doesn't need composite index)
+        try {
+            const fallbackQuery = query(
+                collection(firestore, 'reviews'),
+                where('mechanicId', '==', mechanicId),
+                limit(limitCount * 2) // Get more and sort in memory
+            );
+            
+            const snapshot = await getDocs(fallbackQuery);
+            console.log(`📝 Fallback found ${snapshot.docs.length} reviews`);
+            
+            const reviews = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data(),
+                createdAt: doc.data().createdAt?.toDate() || new Date(),
+            })) as Review[];
+            
+            // Sort by createdAt descending in memory
+            reviews.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+            
+            return reviews.slice(0, limitCount);
+        } catch (fallbackError: any) {
+            console.error('❌ Fallback query also failed:', fallbackError.message);
+            return [];
+        }
+    }
 };
 
 // Notifications

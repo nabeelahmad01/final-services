@@ -84,9 +84,7 @@
         "projectId": "1b5c2494-b755-40d9-9a8d-4711c76c212e"
       }
     },
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
+    "runtimeVersion": "1.0.0",
     "owner": "ahmad634"
   }
 }
