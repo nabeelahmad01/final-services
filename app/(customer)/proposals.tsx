@@ -397,7 +397,15 @@ export default function Proposals() {
                                 showModal,
                                 'Cancel Request',
                                 'Are you sure you want to cancel?',
-                                () => router.back(),
+                                async () => {
+                                    // Update the request status to cancelled
+                                    try {
+                                        await updateServiceRequestStatus(requestId, 'cancelled');
+                                    } catch (e) {
+                                        console.error('Error cancelling request:', e);
+                                    }
+                                    router.back();
+                                },
                                 undefined,
                                 'Yes',
                                 'No'

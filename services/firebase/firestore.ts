@@ -166,6 +166,7 @@ export const subscribeToProposals = (
     const q = query(
         collection(firestore, 'proposals'),
         where('requestId', '==', requestId),
+        where('status', '==', 'pending'), // Only show pending proposals
         orderBy('createdAt', 'desc')
     );
 
@@ -184,6 +185,27 @@ export const updateProposalStatus = async (
     status: Proposal['status']
 ) => {
     await updateDoc(doc(firestore, 'proposals', id), { status });
+};
+
+// Subscribe to all proposals submitted by a mechanic
+export const subscribeToMechanicProposals = (
+    mechanicId: string,
+    callback: (proposals: Proposal[]) => void
+) => {
+    const q = query(
+        collection(firestore, 'proposals'),
+        where('mechanicId', '==', mechanicId),
+        orderBy('createdAt', 'desc')
+    );
+
+    return onSnapshot(q, (snapshot) => {
+        const proposals = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            createdAt: doc.data().createdAt.toDate(),
+        })) as Proposal[];
+        callback(proposals);
+    });
 };
 
 // Bookings

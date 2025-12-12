@@ -19,9 +19,10 @@ import {
     updateMechanicDiamonds, 
     getMechanic,
     subscribeToMechanicScheduledBookings,
+    subscribeToMechanicProposals,
 } from '@/services/firebase/firestore';
 import { COLORS, SIZES, CATEGORIES } from '@/constants/theme';
-import { ServiceRequest, Booking, ServiceCategory } from '@/types';
+import { ServiceRequest, Booking, ServiceCategory, Proposal } from '@/types';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useModal, showSuccessModal, showErrorModal, showConfirmModal } from '@/utils/modalService';
 
@@ -44,6 +45,7 @@ export default function MechanicRequests() {
     const [requests, setRequests] = useState<ServiceRequest[]>([]);
     const [scheduledBookings, setScheduledBookings] = useState<Booking[]>([]);
     const [mechanicCategories, setMechanicCategories] = useState<ServiceCategory[]>([]);
+    const [mechanicProposals, setMechanicProposals] = useState<Proposal[]>([]);
     const [refreshing, setRefreshing] = useState(false);
     const [submitting, setSubmitting] = useState<string | null>(null);
 
@@ -79,10 +81,14 @@ export default function MechanicRequests() {
         
         // Subscribe to scheduled bookings
         const unsubscribeScheduled = subscribeToMechanicScheduledBookings(user.id, setScheduledBookings);
+        
+        // Subscribe to mechanic's own proposals to filter out requests
+        const unsubscribeProposals = subscribeToMechanicProposals(user.id, setMechanicProposals);
 
         return () => {
             unsubscribers.forEach(unsub => unsub());
             unsubscribeScheduled();
+            unsubscribeProposals();
         };
     }, [user]);
 
@@ -184,6 +190,14 @@ export default function MechanicRequests() {
         setTimeout(() => setRefreshing(false), 1000);
     };
 
+    // Filter out requests where mechanic has already submitted a proposal
+    const filteredRequests = requests.filter(request => {
+        const hasProposal = mechanicProposals.some(
+            proposal => proposal.requestId === request.id
+        );
+        return !hasProposal; // Only show requests without any proposal from this mechanic
+    });
+
     const renderRequestsTab = () => (
         <>
             {mechanicCategories.length === 0 ? (
@@ -201,7 +215,7 @@ export default function MechanicRequests() {
                         <Text style={styles.selectCategoriesBtnText}>Select Categories</Text>
                     </TouchableOpacity>
                 </View>
-            ) : requests.length === 0 ? (
+            ) : filteredRequests.length === 0 ? (
                 <View style={styles.emptyState}>
                     <Ionicons name="document-text-outline" size={64} color={COLORS.textSecondary} />
                     <Text style={styles.emptyTitle}>No Requests Available</Text>
@@ -212,10 +226,10 @@ export default function MechanicRequests() {
             ) : (
                 <>
                     <Text style={styles.sectionTitle}>
-                        {requests.length} Request{requests.length > 1 ? 's' : ''} Available
+                        {filteredRequests.length} Request{filteredRequests.length > 1 ? 's' : ''} Available
                     </Text>
 
-                    {requests.map((request) => {
+                    {filteredRequests.map((request) => {
                         const category = CATEGORIES.find(c => c.id === request.category);
                         return (
                             <Card key={request.id} style={styles.requestCard}>
