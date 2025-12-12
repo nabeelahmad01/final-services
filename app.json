@@ -34,15 +34,6 @@
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION",
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION",
-        "CAMERA",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE",
-        "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO",
-        "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION"
       ],
       "config": {
@@ -90,15 +81,12 @@
         "origin": false
       },
       "eas": {
-        "projectId": "1a78a643-8b18-45b7-b92e-17a441be2323"
+        "projectId": "1b5c2494-b755-40d9-9a8d-4711c76c212e"
       }
     },
-    "owner": "fixkar",
     "runtimeVersion": {
       "policy": "appVersion"
     },
-    "updates": {
-      "url": "https://u.expo.dev/1a78a643-8b18-45b7-b92e-17a441be2323"
-    }
+    "owner": "ahmad634"
   }
 }
