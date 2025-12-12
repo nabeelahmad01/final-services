@@ -4,23 +4,112 @@ import {
     Text,
     StyleSheet,
     TouchableOpacity,
-    Platform,
+    Image,
     Dimensions,
     FlatList,
+    Animated,
+    Easing,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { subscribeToProposals, updateProposalStatus, createBooking, updateServiceRequestStatus, getServiceRequest, subscribeToServiceRequest, subscribeToFavorites, addToFavorites, removeFromFavorites } from '@/services/firebase/firestore';
-import { COLORS, SIZES } from '@/constants/theme';
-import { Proposal, ServiceRequest, FavoriteMechanic } from '@/types';
-import { MapView, Marker, PROVIDER_GOOGLE } from '@/utils/mapHelpers';
+import { 
+    subscribeToProposals, 
+    updateProposalStatus, 
+    createBooking, 
+    updateServiceRequestStatus, 
+    subscribeToServiceRequest, 
+    subscribeToFavorites, 
+    addToFavorites, 
+    removeFromFavorites,
+    getNearbyMechanics,
+} from '@/services/firebase/firestore';
+import { COLORS, SIZES, CATEGORIES } from '@/constants/theme';
+import { Proposal, ServiceRequest, Mechanic } from '@/types';
+import { MapView, Marker, Circle, PROVIDER_GOOGLE } from '@/utils/mapHelpers';
 import { ProposalCard } from '@/components/proposal/ProposalCard';
 import { Avatar } from '@/components/shared/Avatar';
 import { useModal, showSuccessModal, showErrorModal, showConfirmModal } from '@/utils/modalService';
 import { useAuthStore } from '@/stores/authStore';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
+const RADIUS_KM = 10; // 10km radius
+
+// Radar Pulse Component
+const RadarPulse = ({ center }: { center: { latitude: number; longitude: number } }) => {
+    const pulse1 = useRef(new Animated.Value(0)).current;
+    const pulse2 = useRef(new Animated.Value(0)).current;
+    const pulse3 = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+        const createPulse = (anim: Animated.Value, delay: number) => {
+            return Animated.loop(
+                Animated.sequence([
+                    Animated.delay(delay),
+                    Animated.timing(anim, {
+                        toValue: 1,
+                        duration: 2000,
+                        easing: Easing.out(Easing.ease),
+                        useNativeDriver: true,
+                    }),
+                    Animated.timing(anim, {
+                        toValue: 0,
+                        duration: 0,
+                        useNativeDriver: true,
+                    }),
+                ])
+            );
+        };
+
+        const anim1 = createPulse(pulse1, 0);
+        const anim2 = createPulse(pulse2, 700);
+        const anim3 = createPulse(pulse3, 1400);
+
+        anim1.start();
+        anim2.start();
+        anim3.start();
+
+        return () => {
+            anim1.stop();
+            anim2.stop();
+            anim3.stop();
+        };
+    }, []);
+
+    const renderPulseRing = (anim: Animated.Value, size: number) => {
+        const scale = anim.interpolate({
+            inputRange: [0, 1],
+            outputRange: [0.3, 1],
+        });
+        const opacity = anim.interpolate({
+            inputRange: [0, 0.5, 1],
+            outputRange: [0.6, 0.3, 0],
+        });
+
+        return (
+            <Animated.View
+                style={[
+                    styles.pulseRing,
+                    {
+                        width: size,
+                        height: size,
+                        borderRadius: size / 2,
+                        transform: [{ scale }],
+                        opacity,
+                    },
+                ]}
+            />
+        );
+    };
+
+    return (
+        <View style={styles.radarContainer}>
+            {renderPulseRing(pulse1, 80)}
+            {renderPulseRing(pulse2, 80)}
+            {renderPulseRing(pulse3, 80)}
+        </View>
+    );
+};
 
 export default function Proposals() {
     const router = useRouter();
@@ -33,14 +122,15 @@ export default function Proposals() {
     const [proposals, setProposals] = useState<Proposal[]>([]);
     const [serviceRequest, setServiceRequest] = useState<ServiceRequest | null>(null);
     const [accepting, setAccepting] = useState<string | null>(null);
-    const [offeredPrice, setOfferedPrice] = useState<number>(260); // Default or from request
-    const [driversViewing, setDriversViewing] = useState(2); // Mock for demo
+    const [offeredPrice, setOfferedPrice] = useState<number>(260);
+    const [nearbyMechanics, setNearbyMechanics] = useState<Mechanic[]>([]);
     const [favorites, setFavorites] = useState<Set<string>>(new Set());
+    const [countdown, setCountdown] = useState(300); // 5 minutes in seconds
 
+    // Fetch service request and subscribe to updates
     useEffect(() => {
         if (!requestId || !user) return;
 
-        // Subscribe to service request for real-time updates
         const unsubscribeRequest = subscribeToServiceRequest(requestId, (req) => {
             if (req) {
                 setServiceRequest(req);
@@ -50,7 +140,6 @@ export default function Proposals() {
 
         const unsubscribeProposals = subscribeToProposals(requestId, setProposals);
 
-        // Subscribe to favorites
         const unsubscribeFavorites = subscribeToFavorites(user.id, (favs) => {
             const favIds = new Set(favs.map(f => f.mechanicId));
             setFavorites(favIds);
@@ -63,18 +152,52 @@ export default function Proposals() {
         };
     }, [requestId, user]);
 
+    // Fetch nearby mechanics when service request is available
+    useEffect(() => {
+        if (!serviceRequest) return;
+
+        const fetchNearbyMechanics = async () => {
+            const mechanics = await getNearbyMechanics(
+                serviceRequest.location,
+                serviceRequest.category,
+                RADIUS_KM
+            );
+            setNearbyMechanics(mechanics);
+        };
+
+        fetchNearbyMechanics();
+        
+        // Refresh every 30 seconds
+        const interval = setInterval(fetchNearbyMechanics, 30000);
+        return () => clearInterval(interval);
+    }, [serviceRequest]);
+
+    // Countdown timer
+    useEffect(() => {
+        if (countdown <= 0) return;
+        
+        const timer = setInterval(() => {
+            setCountdown(prev => Math.max(0, prev - 1));
+        }, 1000);
+
+        return () => clearInterval(timer);
+    }, [countdown]);
+
+    const formatTime = (seconds: number) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    };
+
     const handleAcceptProposal = async (proposal: Proposal) => {
         setAccepting(proposal.id);
         try {
             if (!serviceRequest) throw new Error('Service request not found');
 
-            // Check if this is a scheduled request
             const isScheduledRequest = serviceRequest.isScheduled === true;
 
-            // Update proposal status
             await updateProposalStatus(proposal.id, 'accepted');
 
-            // Create booking with appropriate status
             const bookingId = await createBooking({
                 customerId: proposal.customerId,
                 customerName: serviceRequest.customerName,
@@ -91,17 +214,14 @@ export default function Proposals() {
                 price: proposal.price,
                 estimatedTime: proposal.estimatedTime,
                 status: isScheduledRequest ? 'scheduled' : 'ongoing',
-                // Add scheduling info if scheduled
                 isScheduled: isScheduledRequest,
                 scheduledDate: isScheduledRequest ? serviceRequest.scheduledDate : undefined,
                 scheduledTime: isScheduledRequest ? serviceRequest.scheduledTime : undefined,
             });
 
-            // Update request status
             await updateServiceRequestStatus(requestId, 'accepted');
 
             if (isScheduledRequest) {
-                // For scheduled bookings - show confirmation with details
                 const scheduledDateStr = serviceRequest.scheduledDate 
                     ? (typeof (serviceRequest.scheduledDate as any).toDate === 'function'
                         ? (serviceRequest.scheduledDate as any).toDate().toLocaleDateString()
@@ -111,7 +231,7 @@ export default function Proposals() {
                 showModal({
                     type: 'success',
                     title: '🎉 Booking Confirmed!',
-                    message: `Your service is scheduled for:\n\n📅 ${scheduledDateStr}\n⏰ ${serviceRequest.scheduledTime || 'TBD'}\n\nYou can now chat or call the mechanic. We'll remind you before the appointment.`,
+                    message: `Your service is scheduled for:\n\n📅 ${scheduledDateStr}\n⏰ ${serviceRequest.scheduledTime || 'TBD'}\n\nYou can now chat or call the mechanic.`,
                     buttons: [
                         {
                             text: 'Go to Home',
@@ -126,7 +246,6 @@ export default function Proposals() {
                     ],
                 });
             } else {
-                // For immediate bookings - go to tracking
                 showSuccessModal(
                     showModal,
                     'Success',
@@ -157,9 +276,7 @@ export default function Proposals() {
                 await removeFromFavorites(user.id, proposal.mechanicId);
             } else {
                 await addToFavorites(user.id, {
-                    id: proposal.mechanicId, // Use mechanicId as ID or generate new? addToFavorites usually takes mechanic object
-                    // Wait, addToFavorites takes (customerId, mechanic). Proposal has mechanic info.
-                    // Let's create a partial mechanic object
+                    id: proposal.mechanicId,
                     name: proposal.mechanicName,
                     phone: proposal.mechanicPhone || '',
                     profilePic: proposal.mechanicPhoto,
@@ -172,13 +289,11 @@ export default function Proposals() {
         }
     };
 
-
     const adjustFare = async (amount: number) => {
-        const newPrice = Math.max(50, offeredPrice + amount); // Minimum 50 PKR
+        const newPrice = Math.max(50, offeredPrice + amount);
         setOfferedPrice(newPrice);
 
         try {
-            // Update in Firestore
             const { doc, updateDoc } = await import('firebase/firestore');
             const { firestore } = await import('@/services/firebase/config');
             await updateDoc(doc(firestore, 'serviceRequests', requestId), {
@@ -188,6 +303,9 @@ export default function Proposals() {
             console.error('Error updating fare:', error);
         }
     };
+
+    const progressPercent = (countdown / 300) * 100;
+    const categoryInfo = CATEGORIES.find(c => c.id === serviceRequest?.category);
 
     const renderMap = () => {
         if (!serviceRequest || !MapView) return null;
@@ -200,17 +318,68 @@ export default function Proposals() {
                 initialRegion={{
                     latitude: serviceRequest.location.latitude,
                     longitude: serviceRequest.location.longitude,
-                    latitudeDelta: 0.01,
-                    longitudeDelta: 0.01,
+                    latitudeDelta: 0.08,
+                    longitudeDelta: 0.08,
                 }}
             >
+                {/* 10km Radius Circle - Outer */}
+                {Circle && (
+                    <Circle
+                        center={serviceRequest.location}
+                        radius={RADIUS_KM * 1000}
+                        fillColor="rgba(0, 0, 0, 0.3)"
+                        strokeColor="rgba(0, 172, 193, 0.6)"
+                        strokeWidth={2}
+                    />
+                )}
+
+                {/* Inner glow circle */}
+                {Circle && (
+                    <Circle
+                        center={serviceRequest.location}
+                        radius={RADIUS_KM * 500}
+                        fillColor="rgba(0, 0, 0, 0.15)"
+                        strokeColor="transparent"
+                        strokeWidth={0}
+                    />
+                )}
+
+                {/* Customer Location - Center with pulsing effect */}
                 {Marker && (
                     <Marker
                         coordinate={serviceRequest.location}
-                        title="Your Location"
-                        pinColor={COLORS.primary}
-                    />
+                        anchor={{ x: 0.5, y: 0.5 }}
+                    >
+                        <View style={styles.customerMarkerContainer}>
+                            <RadarPulse center={serviceRequest.location} />
+                            <View style={styles.customerMarkerDot} />
+                        </View>
+                    </Marker>
                 )}
+
+                {/* Nearby Mechanics Markers */}
+                {Marker && nearbyMechanics.map((mechanic) => (
+                    <Marker
+                        key={mechanic.id}
+                        coordinate={mechanic.location!}
+                        anchor={{ x: 0.5, y: 0.5 }}
+                    >
+                        <View style={[styles.mechanicMarker, { borderColor: categoryInfo?.color || COLORS.primary }]}>
+                            {mechanic.profilePic ? (
+                                <Image 
+                                    source={{ uri: mechanic.profilePic }} 
+                                    style={styles.mechanicMarkerImage}
+                                />
+                            ) : (
+                                <Ionicons 
+                                    name={categoryInfo?.icon as any || 'construct'} 
+                                    size={18} 
+                                    color={categoryInfo?.color || COLORS.primary} 
+                                />
+                            )}
+                        </View>
+                    </Marker>
+                ))}
             </MapView>
         );
     };
@@ -264,15 +433,32 @@ export default function Proposals() {
                     </View>
                 ) : (
                     <>
-                        {/* Drivers Viewing at BOTTOM */}
+                        {/* Drivers Viewing Card at BOTTOM */}
                         <View style={styles.driversViewingContainer}>
                             <View style={styles.driversViewing}>
                                 <Text style={styles.viewingText}>
-                                    {driversViewing} drivers are viewing your request
+                                    {nearbyMechanics.length} {nearbyMechanics.length === 1 ? 'driver is' : 'drivers are'} viewing your request
                                 </Text>
                                 <View style={styles.avatars}>
-                                    <Avatar name="D 1" size={24} />
-                                    <Avatar name="D 2" size={24} />
+                                    {nearbyMechanics.slice(0, 5).map((mechanic, index) => (
+                                        <View 
+                                            key={mechanic.id} 
+                                            style={[styles.avatarWrapper, { marginLeft: index > 0 ? -10 : 0, zIndex: 5 - index }]}
+                                        >
+                                            <Avatar 
+                                                name={mechanic.name} 
+                                                uri={mechanic.profilePic || undefined} 
+                                                size={32} 
+                                            />
+                                        </View>
+                                    ))}
+                                    {nearbyMechanics.length > 5 && (
+                                        <View style={[styles.avatarWrapper, { marginLeft: -10, zIndex: 0 }]}>
+                                            <View style={styles.moreAvatar}>
+                                                <Text style={styles.moreAvatarText}>+{nearbyMechanics.length - 5}</Text>
+                                            </View>
+                                        </View>
+                                    )}
                                 </View>
                             </View>
                         </View>
@@ -284,29 +470,36 @@ export default function Proposals() {
                                     <Text style={styles.negotiationTitle}>
                                         Good fare. Your request gets priority
                                     </Text>
-                                    <Text style={styles.timer}>0:51</Text>
+                                    <Text style={styles.timer}>{formatTime(countdown)}</Text>
                                 </View>
-                                <View style={styles.progressBar} />
+                                
+                                {/* Progress Bar */}
+                                <View style={styles.progressBarBg}>
+                                    <View style={[styles.progressBarFill, { width: `${progressPercent}%` }]} />
+                                </View>
 
                                 <View style={styles.fareControls}>
                                     <TouchableOpacity
                                         style={styles.fareButton}
-                                        onPress={() => adjustFare(-10)}
+                                        onPress={() => adjustFare(-5)}
                                     >
-                                        <Text style={styles.fareButtonText}>-10</Text>
+                                        <Text style={styles.fareButtonText}>-5</Text>
                                     </TouchableOpacity>
 
                                     <Text style={styles.fareAmount}>PKR{offeredPrice}</Text>
 
                                     <TouchableOpacity
                                         style={styles.fareButton}
-                                        onPress={() => adjustFare(10)}
+                                        onPress={() => adjustFare(5)}
                                     >
-                                        <Text style={styles.fareButtonText}>+10</Text>
+                                        <Text style={styles.fareButtonText}>+5</Text>
                                     </TouchableOpacity>
                                 </View>
 
-                                <TouchableOpacity style={styles.raiseFareButton}>
+                                <TouchableOpacity 
+                                    style={styles.raiseFareButton}
+                                    onPress={() => adjustFare(20)}
+                                >
                                     <Text style={styles.raiseFareText}>Raise fare</Text>
                                 </TouchableOpacity>
                             </View>
@@ -325,7 +518,7 @@ const styles = StyleSheet.create({
     },
     overlay: {
         flex: 1,
-        justifyContent: 'flex-start', // Changed from flex-end to flex-start
+        justifyContent: 'flex-start',
     },
     header: {
         paddingHorizontal: 16,
@@ -336,7 +529,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         backgroundColor: COLORS.surface,
         alignSelf: 'flex-start',
-        paddingVertical: 8,
+        paddingVertical: 10,
         paddingHorizontal: 16,
         borderRadius: 24,
         gap: 8,
@@ -351,7 +544,6 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         color: COLORS.text,
     },
-
     proposalsContainer: {
         marginTop: 12,
         maxHeight: '70%',
@@ -372,28 +564,75 @@ const styles = StyleSheet.create({
         marginLeft: 16,
         marginBottom: 12,
     },
+    // Radar Pulse Animation
+    radarContainer: {
+        width: 80,
+        height: 80,
+        justifyContent: 'center',
+        alignItems: 'center',
+        position: 'absolute',
+    },
+    pulseRing: {
+        position: 'absolute',
+        borderWidth: 2,
+        borderColor: COLORS.primary,
+        backgroundColor: 'rgba(0, 172, 193, 0.1)',
+    },
+    // Customer Marker - Center dot with radar
+    customerMarkerContainer: {
+        width: 80,
+        height: 80,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    customerMarkerDot: {
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        backgroundColor: COLORS.primary,
+        borderWidth: 4,
+        borderColor: COLORS.white,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+        elevation: 5,
+    },
+    // Mechanic Marker
+    mechanicMarker: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: COLORS.surface,
+        borderWidth: 3,
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+        elevation: 5,
+    },
+    mechanicMarkerImage: {
+        width: 38,
+        height: 38,
+        borderRadius: 19,
+    },
+    // Drivers Viewing Section
     driversViewingContainer: {
         position: 'absolute',
-        bottom: 220,
+        bottom: 250,
         left: 0,
         right: 0,
         paddingHorizontal: 16,
-    },
-    fareCardContainer: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        paddingHorizontal: 16,
-        paddingBottom: 16,
     },
     driversViewing: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         backgroundColor: COLORS.surface,
-        padding: 12,
-        borderRadius: 12,
+        padding: 14,
+        borderRadius: 16,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
@@ -404,17 +643,45 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '600',
         color: COLORS.text,
+        flex: 1,
     },
     avatars: {
         flexDirection: 'row',
-        gap: -8,
+        alignItems: 'center',
+    },
+    avatarWrapper: {
+        borderWidth: 2,
+        borderColor: COLORS.surface,
+        borderRadius: 18,
+    },
+    moreAvatar: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: COLORS.primary,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    moreAvatarText: {
+        fontSize: 11,
+        fontWeight: 'bold',
+        color: COLORS.white,
+    },
+    // Fare Card
+    fareCardContainer: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        paddingHorizontal: 16,
+        paddingBottom: 16,
     },
     negotiationCard: {
         backgroundColor: COLORS.surface,
         borderRadius: 20,
         padding: 20,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
+        shadowOffset: { width: 0, height: -4 },
         shadowOpacity: 0.15,
         shadowRadius: 12,
         elevation: 8,
@@ -432,16 +699,21 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     timer: {
-        fontSize: 16,
+        fontSize: 18,
         fontWeight: 'bold',
         color: COLORS.text,
     },
-    progressBar: {
+    progressBarBg: {
         height: 4,
+        backgroundColor: COLORS.border,
+        borderRadius: 2,
+        marginBottom: 20,
+        overflow: 'hidden',
+    },
+    progressBarFill: {
+        height: '100%',
         backgroundColor: COLORS.text,
         borderRadius: 2,
-        width: '100%',
-        marginBottom: 20,
     },
     fareControls: {
         flexDirection: 'row',
@@ -450,25 +722,25 @@ const styles = StyleSheet.create({
         marginBottom: 16,
     },
     fareButton: {
-        width: 50,
-        height: 40,
-        backgroundColor: '#F5F5F5',
+        width: 60,
+        height: 44,
+        backgroundColor: COLORS.background,
         borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center',
     },
     fareButtonText: {
-        fontSize: 16,
+        fontSize: 18,
         fontWeight: '600',
         color: COLORS.textSecondary,
     },
     fareAmount: {
-        fontSize: 28,
+        fontSize: 32,
         fontWeight: 'bold',
         color: COLORS.text,
     },
     raiseFareButton: {
-        backgroundColor: '#F5F5F5',
+        backgroundColor: COLORS.background,
         paddingVertical: 16,
         borderRadius: 16,
         alignItems: 'center',

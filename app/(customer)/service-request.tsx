@@ -91,12 +91,28 @@ export default function ServiceRequest() {
             setLocation(newLocation);
             animateToLocation(newLocation);
 
-            // Get address from coordinates
+            // Get address from coordinates - with full street details
             const addressData = await Location.reverseGeocodeAsync(newLocation);
             if (addressData[0]) {
                 const addr = addressData[0];
-                const formattedAddress = `${addr.street || ''} ${addr.city || ''}, ${addr.region || ''}, Pakistan`.trim();
+                // Build a detailed address string
+                const parts = [];
+                if (addr.streetNumber) parts.push(addr.streetNumber);
+                if (addr.street) parts.push(addr.street);
+                if (addr.district) parts.push(addr.district);
+                if (addr.subregion) parts.push(addr.subregion);
+                if (addr.city) parts.push(addr.city);
+                if (addr.region && addr.region !== addr.city) parts.push(addr.region);
+                
+                const formattedAddress = parts.length > 0 
+                    ? parts.join(', ') 
+                    : `${addr.city || 'Unknown'}, Pakistan`;
                 setAddress(formattedAddress);
+                
+                // Auto-populate the search field
+                if (googlePlacesRef.current) {
+                    googlePlacesRef.current.setAddressText(formattedAddress);
+                }
             }
         } catch (error: any) {
             // Silently handle - use default location (Islamabad)
@@ -141,8 +157,24 @@ export default function ServiceRequest() {
             const addressData = await Location.reverseGeocodeAsync({ latitude, longitude });
             if (addressData[0]) {
                 const addr = addressData[0];
-                const formattedAddress = `${addr.street || ''} ${addr.city || ''}, ${addr.region || ''}, Pakistan`.trim();
+                // Build a detailed address string
+                const parts = [];
+                if (addr.streetNumber) parts.push(addr.streetNumber);
+                if (addr.street) parts.push(addr.street);
+                if (addr.district) parts.push(addr.district);
+                if (addr.subregion) parts.push(addr.subregion);
+                if (addr.city) parts.push(addr.city);
+                if (addr.region && addr.region !== addr.city) parts.push(addr.region);
+                
+                const formattedAddress = parts.length > 0 
+                    ? parts.join(', ') 
+                    : `${addr.city || 'Unknown'}, Pakistan`;
                 setAddress(formattedAddress);
+                
+                // Update search field too
+                if (googlePlacesRef.current) {
+                    googlePlacesRef.current.setAddressText(formattedAddress);
+                }
             }
         } catch (error) {
             console.error('Reverse geocode error:', error);
@@ -314,7 +346,7 @@ export default function ServiceRequest() {
                 <View style={styles.searchOverlay}>
                     <GooglePlacesAutocomplete
                         ref={googlePlacesRef}
-                        placeholder="Search location..."
+                        placeholder="Search plaza, street, area..."
                         fetchDetails={true}
                         listViewDisplayed={listViewDisplayed}
                         textInputProps={{
@@ -325,8 +357,15 @@ export default function ServiceRequest() {
                             key: process.env.EXPO_PUBLIC_GOOGLE_API_KEY || '',
                             language: 'en',
                             components: 'country:pk', // Pakistan only
-                            types: 'geocode', // Get all address types
+                            // No types filter - show all places including plazas, buildings, streets
+                            location: `${location.latitude},${location.longitude}`,
+                            radius: 10000, // 10km radius bias
+                            strictbounds: false, // Allow results outside but prioritize nearby
                         }}
+                        GooglePlacesDetailsQuery={{
+                            fields: 'geometry,formatted_address,name',
+                        }}
+                        predefinedPlaces={[]}
                         requestUrl={{
                             useOnPlatform: 'all',
                             url: 'https://maps.googleapis.com/maps/api',
