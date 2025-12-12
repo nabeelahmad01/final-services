@@ -21,7 +21,7 @@ import {
     subscribeToMechanicScheduledBookings,
 } from '@/services/firebase/firestore';
 import { COLORS, SIZES, CATEGORIES } from '@/constants/theme';
-import { ServiceRequest, Booking } from '@/types';
+import { ServiceRequest, Booking, ServiceCategory } from '@/types';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useModal, showSuccessModal, showErrorModal, showConfirmModal } from '@/utils/modalService';
 
@@ -43,20 +43,45 @@ export default function MechanicRequests() {
     const [activeTab, setActiveTab] = useState<TabType>('requests');
     const [requests, setRequests] = useState<ServiceRequest[]>([]);
     const [scheduledBookings, setScheduledBookings] = useState<Booking[]>([]);
+    const [mechanicCategories, setMechanicCategories] = useState<ServiceCategory[]>([]);
     const [refreshing, setRefreshing] = useState(false);
     const [submitting, setSubmitting] = useState<string | null>(null);
 
     useEffect(() => {
         if (!user) return;
 
-        // Subscribe to service requests
-        const unsubscribeRequests = subscribeToServiceRequests('car_mechanic', setRequests);
+        let unsubscribers: (() => void)[] = [];
+
+        // Fetch mechanic's categories and subscribe to matching requests
+        const setupSubscriptions = async () => {
+            const mechanicData = await getMechanic(user.id);
+            setMechanicCategories(mechanicData?.categories || []);
+            
+            if (mechanicData?.categories && mechanicData.categories.length > 0) {
+                // Subscribe to each category the mechanic has selected
+                const allRequests: Map<string, ServiceRequest> = new Map();
+                
+                mechanicData.categories.forEach(category => {
+                    const unsubscribe = subscribeToServiceRequests(category, (categoryRequests) => {
+                        // Merge requests from this category
+                        categoryRequests.forEach(req => allRequests.set(req.id, req));
+                        // Convert map to array and sort by date
+                        const mergedRequests = Array.from(allRequests.values())
+                            .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+                        setRequests(mergedRequests);
+                    });
+                    unsubscribers.push(unsubscribe);
+                });
+            }
+        };
+
+        setupSubscriptions();
         
         // Subscribe to scheduled bookings
         const unsubscribeScheduled = subscribeToMechanicScheduledBookings(user.id, setScheduledBookings);
 
         return () => {
-            unsubscribeRequests();
+            unsubscribers.forEach(unsub => unsub());
             unsubscribeScheduled();
         };
     }, [user]);
@@ -161,12 +186,27 @@ export default function MechanicRequests() {
 
     const renderRequestsTab = () => (
         <>
-            {requests.length === 0 ? (
+            {mechanicCategories.length === 0 ? (
+                <View style={styles.emptyState}>
+                    <Ionicons name="construct-outline" size={64} color={COLORS.warning} />
+                    <Text style={styles.emptyTitle}>No Categories Selected</Text>
+                    <Text style={styles.emptySubtitle}>
+                        Please select your service categories to receive requests
+                    </Text>
+                    <TouchableOpacity
+                        style={styles.selectCategoriesBtn}
+                        onPress={() => router.push('/(auth)/mechanic-categories')}
+                    >
+                        <Ionicons name="settings" size={18} color={COLORS.white} />
+                        <Text style={styles.selectCategoriesBtnText}>Select Categories</Text>
+                    </TouchableOpacity>
+                </View>
+            ) : requests.length === 0 ? (
                 <View style={styles.emptyState}>
                     <Ionicons name="document-text-outline" size={64} color={COLORS.textSecondary} />
                     <Text style={styles.emptyTitle}>No Requests Available</Text>
                     <Text style={styles.emptySubtitle}>
-                        New service requests will appear here
+                        New service requests for your categories will appear here
                     </Text>
                 </View>
             ) : (
@@ -627,6 +667,22 @@ const styles = StyleSheet.create({
     startJobBtnText: {
         fontSize: SIZES.base,
         fontWeight: 'bold',
+        color: COLORS.white,
+    },
+    selectCategoriesBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        backgroundColor: COLORS.primary,
+        paddingHorizontal: 24,
+        paddingVertical: 14,
+        borderRadius: 12,
+        marginTop: 20,
+    },
+    selectCategoriesBtnText: {
+        fontSize: SIZES.base,
+        fontWeight: '600',
         color: COLORS.white,
     },
 });

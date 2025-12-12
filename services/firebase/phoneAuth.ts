@@ -257,7 +257,7 @@ export const completeProfile = async ({
         if (role === 'mechanic') {
             const mechanicData: Partial<Mechanic> = {
                 ...userData,
-                categories: ['car_mechanic'],
+                categories: [], // Will be set in mechanic-categories screen
                 rating: 0,
                 totalRatings: 0,
                 ratingCount: 0,

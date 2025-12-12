@@ -71,11 +71,11 @@ export default function CompleteProfileScreen() {
                     showModal,
                     'Welcome to FixKar!',
                     role === 'mechanic'
-                        ? 'Complete your KYC to start receiving job requests'
+                        ? 'Now select the services you specialize in'
                         : 'You can now request services from nearby professionals',
                     () => {
                         if (role === 'mechanic') {
-                            router.replace('/(mechanic)/dashboard');
+                            router.replace('/(auth)/mechanic-categories');
                         } else {
                             router.replace('/(customer)/home');
                         }
@@ -254,9 +254,9 @@ export default function CompleteProfileScreen() {
 
                     {role === 'mechanic' && (
                         <View style={styles.noteContainer}>
-                            <Ionicons name="information-circle" size={20} color={COLORS.warning} />
+                            <Ionicons name="information-circle" size={20} color={COLORS.primary} />
                             <Text style={styles.noteText}>
-                                As a service provider, you'll need to complete KYC verification to receive job requests.
+                                Next, you'll select your service categories. After KYC verification, you'll start receiving job requests for those services.
                             </Text>
                         </View>
                     )}
@@ -416,7 +416,7 @@ const styles = StyleSheet.create({
     noteContainer: {
         flexDirection: 'row',
         alignItems: 'flex-start',
-        backgroundColor: COLORS.warning + '15',
+        backgroundColor: COLORS.primary + '12',
         padding: 14,
         borderRadius: 12,
         marginBottom: 20,
