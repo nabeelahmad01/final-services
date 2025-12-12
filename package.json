@@ -37,6 +37,7 @@
     "expo-notifications": "~0.32.13",
     "expo-router": "~6.0.15",
     "expo-status-bar": "~3.0.8",
+    "expo-updates": "~29.0.15",
     "firebase": "^12.6.0",
     "i18next": "^25.6.3",
     "intl-pluralrules": "^2.0.1",
