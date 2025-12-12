@@ -56,7 +56,6 @@
     "plugins": [
       "expo-router",
       "expo-font",
-      "./plugins/withAbiSplits.js",
       [
         "expo-camera",
         {
