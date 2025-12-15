@@ -41,13 +41,8 @@
           "apiKey": "AIzaSyBhYMnd2kw3IravpOpUScd3XC0LXUS2hlY"
         }
       },
-      "versionCode": 1,
-      "ndk": {
-        "abiFilters": [
-          "arm64-v8a",
-          "arm64-v8a"
-        ]
-      }
+      "googleServicesFile": "./google-services.json",
+      "versionCode": 1
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -81,10 +76,10 @@
         "origin": false
       },
       "eas": {
-        "projectId": "1b5c2494-b755-40d9-9a8d-4711c76c212e"
+        "projectId": "0b5c778d-4bf3-4859-abc4-06ed5773f8e6"
       }
     },
     "runtimeVersion": "1.0.0",
-    "owner": "ahmad634"
+    "owner": "nabeel634"
   }
 }

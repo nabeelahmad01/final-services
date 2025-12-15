@@ -23,22 +23,6 @@ try {
     firebaseAuth = require('@react-native-firebase/auth').default;
     nativeFirebaseAvailable = true;
     console.log('✅ Native Firebase Auth loaded successfully');
-    
-    // Initialize Firebase App Check for Play Integrity (prevents reCAPTCHA in Chrome)
-    try {
-        const appCheck = require('@react-native-firebase/app-check').default;
-        // Initialize with Play Integrity provider for Android
-        appCheck().initializeAppCheck({
-            provider: appCheck.playIntegrityProvider,
-            isTokenAutoRefreshEnabled: true,
-        }).then(() => {
-            console.log('✅ Firebase App Check initialized with Play Integrity');
-        }).catch((err: any) => {
-            console.log('⚠️ App Check initialization warning:', err.message);
-        });
-    } catch (appCheckError: any) {
-        console.log('⚠️ Firebase App Check not available:', appCheckError.message);
-    }
 } catch (e: any) {
     console.log('⚠️ Native Firebase Auth not available:', e.message);
     nativeFirebaseAvailable = false;
