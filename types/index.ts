@@ -182,7 +182,26 @@ export interface Chat {
 export interface Notification {
     id: string;
     userId: string;
-    type: 'new_request' | 'new_proposal' | 'proposal_accepted' | 'booking_started' | 'booking_completed' | 'payment' | 'kyc_update' | 'chat' | 'call';
+    type: 
+        | 'new_request' 
+        | 'new_proposal' 
+        | 'proposal_accepted' 
+        | 'proposal_rejected'
+        | 'booking_started' 
+        | 'booking_completed' 
+        | 'mechanic_arriving'
+        | 'mechanic_arrived'
+        | 'payment' 
+        | 'payment_received'
+        | 'kyc_update' 
+        | 'kyc_approved'
+        | 'kyc_rejected'
+        | 'chat' 
+        | 'chat_message'
+        | 'call'
+        | 'new_service_request'
+        | 'diamond_purchased'
+        | 'scheduled_reminder';
     title: string;
     message: string;
     data?: any;

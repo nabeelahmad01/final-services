@@ -155,6 +155,12 @@ android {
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
+    
+    // Play Integrity for silent phone verification (no Chrome reCAPTCHA)
+    implementation("com.google.android.play:integrity:1.3.0")
+    
+    // Firebase App Check for app verification
+    implementation("com.google.firebase:firebase-appcheck-playintegrity:17.1.1")
 
     def isGifEnabled = (findProperty('expo.gif.enabled') ?: "") == "true";
     def isWebpEnabled = (findProperty('expo.webp.enabled') ?: "") == "true";

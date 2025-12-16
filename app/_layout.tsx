@@ -7,7 +7,13 @@ import { useCallStore } from '@/stores/useCallStore';
 import { useServiceRequestStore } from '@/stores/useServiceRequestStore';
 import { subscribeToAuthChanges, getCurrentUser } from '@/services/firebase/authService';
 import { subscribeToIncomingCalls, CallSession, subscribeToServiceRequests, createProposal, updateMechanicDiamonds, getMechanic } from '@/services/firebase/firestore';
-import { notifyNewProposal } from '@/services/firebase/notifications';
+import { 
+    notifyNewProposal, 
+    registerForPushNotifications, 
+    savePushTokenToUser, 
+    setupFCMHandlers,
+    subscribeToNotificationResponse 
+} from '@/services/firebase/notifications';
 import { calculateDistance } from '@/services/location/locationService';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from '@expo-google-fonts/plus-jakarta-sans';
@@ -52,17 +58,49 @@ export default function RootLayout() {
         // Load active booking from storage
         loadActiveBooking();
 
+        // Set up FCM handlers for push notifications
+        setupFCMHandlers();
+
         // Subscribe to auth state changes
         const unsubscribe = subscribeToAuthChanges(async (firebaseUser) => {
             if (firebaseUser) {
                 const user = await getCurrentUser();
                 setUser(user);
+
+                // Register for push notifications when user logs in
+                try {
+                    const pushToken = await registerForPushNotifications();
+                    if (pushToken && user?.id) {
+                        await savePushTokenToUser(user.id, pushToken);
+                        console.log('✅ Push notification registered for user:', user.id);
+                    }
+                } catch (error) {
+                    console.log('⚠️ Push notification registration failed:', error);
+                }
             } else {
                 setUser(null);
             }
         });
 
-        return () => unsubscribe();
+        // Subscribe to notification tap responses for navigation
+        const notificationSubscription = subscribeToNotificationResponse((response) => {
+            const data = response.notification.request.content.data;
+            console.log('🔔 Notification tapped:', data);
+            
+            // Navigate based on notification type
+            if (data?.bookingId) {
+                router.push(`/(customer)/booking-details?id=${data.bookingId}`);
+            } else if (data?.chatId) {
+                router.push(`/chat?id=${data.chatId}`);
+            } else if (data?.requestId) {
+                router.push(`/(customer)/proposals?requestId=${data.requestId}`);
+            }
+        });
+
+        return () => {
+            unsubscribe();
+            notificationSubscription.remove();
+        };
     }, []);
 
     // Subscribe to incoming calls when user is logged in

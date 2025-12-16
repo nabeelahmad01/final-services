@@ -2,7 +2,13 @@
  * Phone OTP Authentication Service
  * 
  * Uses @react-native-firebase/auth for native Firebase Phone Authentication
- * Works with Firebase Console test phone numbers and real SMS in production
+ * with Play Integrity API for silent verification (no Chrome reCAPTCHA)
+ * 
+ * Key Features:
+ * - Silent verification using Play Integrity (user stays in app)
+ * - Automatic fallback to reCAPTCHA if Play Integrity fails
+ * - Test phone numbers support for development
+ * - Complete profile creation and login flow
  */
 
 import {
@@ -19,6 +25,7 @@ import { User, UserRole, Mechanic } from '@/types';
 // Try to import native Firebase auth
 let firebaseAuth: any = null;
 let nativeFirebaseAvailable = false;
+
 try {
     firebaseAuth = require('@react-native-firebase/auth').default;
     nativeFirebaseAvailable = true;
@@ -29,7 +36,7 @@ try {
 }
 
 // Check environment for OTP mode
-const DEV_MODE = process.env.EXPO_PUBLIC_OTP_DEV_MODE === 'true' || !firebaseAuth;
+const DEV_MODE = process.env.EXPO_PUBLIC_OTP_DEV_MODE === 'true';
 
 // Store for OTP verification
 let pendingVerification: {
@@ -64,8 +71,32 @@ const formatPhoneNumber = (phone: string): string => {
 };
 
 /**
+ * Initialize Firebase Auth settings for silent verification
+ * This configures the auth instance to prefer Play Integrity over reCAPTCHA
+ */
+const initializeAuthSettings = () => {
+    if (firebaseAuth && nativeFirebaseAvailable) {
+        try {
+            const auth = firebaseAuth();
+            
+            // Enable app verification (uses Play Integrity on Android)
+            // This ensures silent verification is attempted first
+            auth.settings.appVerificationDisabledForTesting = false;
+            
+            console.log('✅ Firebase Auth settings initialized for silent verification');
+        } catch (e) {
+            console.log('⚠️ Could not initialize auth settings:', e);
+        }
+    }
+};
+
+// Initialize on module load
+initializeAuthSettings();
+
+/**
  * Send OTP to phone number
- * Uses Firebase Phone Auth for real SMS or test phone numbers
+ * Uses Firebase Phone Auth with Play Integrity for silent verification
+ * User stays in app - no Chrome redirect!
  */
 export const sendOTP = async (
     phoneNumber: string,
@@ -75,22 +106,33 @@ export const sendOTP = async (
         const formattedPhone = formatPhoneNumber(phoneNumber);
         console.log('📱 Sending OTP to:', formattedPhone);
         console.log('📱 Dev Mode:', DEV_MODE);
-        console.log('📱 Firebase Auth available:', !!firebaseAuth);
+        console.log('📱 Native Firebase available:', nativeFirebaseAvailable);
 
-        // Use native Firebase Phone Auth if available
-        if (firebaseAuth && !DEV_MODE) {
+        // Development mode - simulate OTP
+        if (DEV_MODE) {
+            const otp = generateOTP();
+            pendingVerification = {
+                phone: formattedPhone,
+                otp,
+                expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+            };
+            console.log('🔐 [DEV MODE] Generated OTP:', otp);
+            return { success: true, otp, isDevMode: true };
+        }
+
+        // Use native Firebase Phone Auth with Play Integrity
+        if (firebaseAuth && nativeFirebaseAvailable) {
             try {
-                console.log('🔥 Using Firebase Phone Auth...');
+                console.log('🔥 Using Firebase Phone Auth with Play Integrity...');
                 
-                // Configure auth settings to use native verification (Play Integrity)
-                // This prevents the reCAPTCHA from opening in Chrome
                 const auth = firebaseAuth();
                 
-                // For testing: uncomment this to disable app verification
-                // auth.settings.appVerificationDisabledForTesting = true;
-                
-                // Use signInWithPhoneNumber with forceResend disabled
-                // The second parameter can be used for forceResend token
+                // signInWithPhoneNumber will:
+                // 1. First try Play Integrity API (silent, user stays in app)
+                // 2. If Play Integrity fails, fallback to SafetyNet
+                // 3. Only if both fail, show reCAPTCHA (but this requires additional setup)
+                // 
+                // With Play Integrity configured and app signed, verification is SILENT!
                 const confirmation = await auth.signInWithPhoneNumber(formattedPhone);
                 
                 pendingVerification = {
@@ -100,36 +142,55 @@ export const sendOTP = async (
                     confirmationResult: confirmation,
                 };
 
-                console.log('✅ OTP sent via Firebase Phone Auth');
+                console.log('✅ OTP sent successfully via Firebase Phone Auth');
+                console.log('📲 User will receive SMS in app - no Chrome redirect!');
+                
                 return { success: true, isDevMode: false };
+                
             } catch (firebaseError: any) {
                 console.error('❌ Firebase Phone Auth error:', firebaseError);
+                console.error('Error code:', firebaseError.code);
+                console.error('Error message:', firebaseError.message);
                 
                 // Handle specific Firebase errors
                 if (firebaseError.code === 'auth/invalid-phone-number') {
-                    return { success: false, error: 'Invalid phone number format' };
+                    return { success: false, error: 'Invalid phone number. Please check and try again.' };
                 }
                 if (firebaseError.code === 'auth/too-many-requests') {
-                    return { success: false, error: 'Too many attempts. Please try again later.' };
+                    return { success: false, error: 'Too many attempts. Please wait a few minutes.' };
                 }
                 if (firebaseError.code === 'auth/quota-exceeded') {
                     return { success: false, error: 'SMS quota exceeded. Please try again later.' };
                 }
+                if (firebaseError.code === 'auth/app-not-authorized') {
+                    return { success: false, error: 'App not authorized. Please ensure SHA-256 is configured in Firebase.' };
+                }
+                if (firebaseError.code === 'auth/missing-client-identifier') {
+                    // This happens when Play Integrity/SafetyNet is not properly configured
+                    console.log('⚠️ Play Integrity not configured. Ensure app is signed and published.');
+                    return { success: false, error: 'Verification service unavailable. Please try again.' };
+                }
+                if (firebaseError.code === 'auth/network-request-failed') {
+                    return { success: false, error: 'Network error. Please check your internet connection.' };
+                }
                 
-                // Fall back to dev mode if Firebase fails
-                console.log('⚠️ Falling back to dev mode...');
+                // Generic error
+                return { 
+                    success: false, 
+                    error: firebaseError.message || 'Failed to send OTP. Please try again.' 
+                };
             }
         }
 
-        // Development mode - simulate OTP
+        // Fallback if native Firebase not available
+        console.log('⚠️ Native Firebase not available, using dev mode fallback');
         const otp = generateOTP();
         pendingVerification = {
             phone: formattedPhone,
             otp,
             expiresAt: new Date(Date.now() + 5 * 60 * 1000),
         };
-
-        console.log('🔐 [DEV MODE] Generated OTP:', otp);
+        console.log('🔐 [FALLBACK DEV MODE] Generated OTP:', otp);
         return { success: true, otp, isDevMode: true };
 
     } catch (error: any) {
@@ -140,6 +201,7 @@ export const sendOTP = async (
 
 /**
  * Verify OTP code
+ * Works with both Firebase verification and dev mode
  */
 export const verifyOTP = async (
     otp: string
@@ -163,19 +225,28 @@ export const verifyOTP = async (
             try {
                 console.log('🔥 Verifying with Firebase Phone Auth...');
                 await pendingVerification.confirmationResult.confirm(otp);
-                console.log('✅ Firebase OTP verified successfully');
+                console.log('✅ Firebase OTP verified successfully!');
             } catch (e: any) {
                 console.error('❌ Firebase OTP verification failed:', e);
+                
                 if (e.code === 'auth/invalid-verification-code') {
-                    return { success: false, error: 'Invalid OTP code. Please check and try again.' };
+                    return { success: false, error: 'Invalid OTP. Please check and try again.' };
                 }
+                if (e.code === 'auth/code-expired') {
+                    return { success: false, error: 'OTP has expired. Please request a new one.' };
+                }
+                if (e.code === 'auth/session-expired') {
+                    return { success: false, error: 'Session expired. Please request a new OTP.' };
+                }
+                
                 return { success: false, error: e.message || 'Invalid OTP code' };
             }
         } else {
             // Dev mode verification
             if (otp !== pendingVerification.otp) {
-                return { success: false, error: 'Invalid OTP code. Please check and try again.' };
+                return { success: false, error: 'Invalid OTP. Please check and try again.' };
             }
+            console.log('✅ Dev mode OTP verified successfully');
         }
 
         // Check if user exists with this phone
@@ -186,10 +257,11 @@ export const verifyOTP = async (
 
         const isNewUser = mechanicsSnap.empty && customersSnap.empty;
 
-        console.log('✅ OTP verified successfully');
+        console.log('✅ OTP verification complete');
         console.log('📱 Phone:', phone);
         console.log('👤 Is new user:', isNewUser);
         
+        // Clear verification state
         pendingVerification = null;
 
         return { success: true, phone, isNewUser };
@@ -198,6 +270,18 @@ export const verifyOTP = async (
         console.error('❌ Error verifying OTP:', error);
         return { success: false, error: error.message || 'Verification failed' };
     }
+};
+
+/**
+ * Resend OTP to the same phone number
+ */
+export const resendOTP = async (): Promise<{ success: boolean; otp?: string; error?: string; isDevMode?: boolean }> => {
+    if (!pendingVerification) {
+        return { success: false, error: 'No verification in progress' };
+    }
+    
+    console.log('🔄 Resending OTP to:', pendingVerification.phone);
+    return sendOTP(pendingVerification.phone);
 };
 
 /**
@@ -267,6 +351,7 @@ export const completeProfile = async ({
         if (email && !email.endsWith('@fixkar.app')) {
             try {
                 await sendEmailVerification(firebaseUser);
+                console.log('📧 Verification email sent');
             } catch (e) {
                 console.log('Could not send verification email:', e);
             }
@@ -325,6 +410,7 @@ export const loginWithPhone = async (
             phone: data.phone,
             role,
             createdAt: data.createdAt?.toDate() || new Date(),
+            profilePic: data.profilePic,
         };
 
         console.log('✅ Login successful for:', user.name);

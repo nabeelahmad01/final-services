@@ -2,5 +2,17 @@
   "react-native": {
     "android_task_executor_maximum_pool_size": 10,
     "android_task_executor_keep_alive_seconds": 3
-  }
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log"
+      ]
+    }
+  ]
 }
