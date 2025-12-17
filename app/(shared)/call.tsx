@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
     View,
     Text,
@@ -8,6 +8,8 @@ import {
     Dimensions,
     Linking,
     Alert,
+    AppState,
+    AppStateStatus,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -59,18 +61,82 @@ export default function CallScreen() {
     const callType = (params.callType as 'voice' | 'video') || 'voice';
     const isIncoming = params.isIncoming === 'true';
     const callId = params.callId as string;
+    const bookingId = params.bookingId as string | undefined; // For returning to active booking
 
     const [isMuted, setIsMuted] = useState(false);
-    const [isSpeaker, setIsSpeaker] = useState(false);
+    const [isSpeaker, setIsSpeaker] = useState(true); // Default to speaker ON for better audio
     const [duration, setDuration] = useState(0);
     const [isConnecting, setIsConnecting] = useState(!isIncoming);
     const [isConnected, setIsConnected] = useState(false);
     const [currentCallId, setCurrentCallId] = useState<string | null>(callId || null);
     const [remoteUserJoined, setRemoteUserJoined] = useState(false);
     const [agoraReady, setAgoraReady] = useState(false);
+    const [callEndedByRemote, setCallEndedByRemote] = useState(false);
 
     const pulseAnim = useRef(new Animated.Value(1)).current;
     const channelNameRef = useRef<string>('');
+    const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+    const isEndingCallRef = useRef(false); // Prevent duplicate end call
+
+    // Define handleEndCall BEFORE any useEffect that uses it
+    const handleEndCall = useCallback(async (endedByRemote: boolean = false) => {
+        // Prevent duplicate calls
+        if (isEndingCallRef.current) {
+            console.log('📞 Call already ending, skipping...');
+            return;
+        }
+        isEndingCallRef.current = true;
+
+        try {
+            console.log('📞 Ending call...', { endedByRemote, currentCallId });
+            const agora = getAgoraService();
+            if (agora) {
+                await agora.leaveCall?.();
+            }
+
+            if (currentCallId) {
+                await endCallSession(currentCallId);
+            }
+        } catch (error) {
+            console.error('Error ending call:', error);
+        } finally {
+            endCall();
+            
+            // Show message if ended by remote
+            if (endedByRemote) {
+                Alert.alert('Call Ended', `${userName} ended the call`);
+            }
+
+            // Navigate appropriately based on user role
+            try {
+                const isMechanic = user?.role === 'mechanic';
+                
+                if (bookingId) {
+                    // Go back to booking details - use correct route for role
+                    if (isMechanic) {
+                        router.replace(`/(mechanic)/dashboard`);
+                    } else {
+                        router.replace(`/(customer)/booking-details?id=${bookingId}`);
+                    }
+                } else if (router.canGoBack()) {
+                    router.back();
+                } else {
+                    // Fallback to appropriate home screen
+                    if (isMechanic) {
+                        router.replace('/(mechanic)/dashboard');
+                    } else {
+                        router.replace('/(customer)/home');
+                    }
+                }
+            } catch (navError) {
+                console.error('Navigation error:', navError);
+                // Safe fallback - just go back
+                if (router.canGoBack()) {
+                    router.back();
+                }
+            }
+        }
+    }, [currentCallId, bookingId, userName, endCall, router, user]);
 
     // Initialize Agora and setup call
     useEffect(() => {
@@ -115,10 +181,11 @@ export default function CallScreen() {
                         setIsConnected(true);
                     },
                     onUserOffline: (uid: number, reason: number) => {
-                        console.log('👋 Remote user left:', uid);
+                        console.log('👋 Remote user left:', uid, 'reason:', reason);
                         setRemoteUserJoined(false);
                         if (reason !== 2) {
-                            handleEndCall();
+                            // Remote user left - end call
+                            handleEndCall(true);
                         }
                     },
                     onError: (errorCode: number, message: string) => {
@@ -245,12 +312,38 @@ export default function CallScreen() {
                 setIsConnecting(false);
                 setIsConnected(true);
             } else if (call.status === 'declined' || call.status === 'ended') {
-                handleEndCall();
+                // Call ended by remote user
+                setCallEndedByRemote(true);
+                handleEndCall(true);
             }
         });
 
         return () => unsubscribe();
-    }, [currentCallId]);
+    }, [currentCallId, handleEndCall]);
+
+    // AppState monitoring - end call when app goes to background/closes
+    useEffect(() => {
+        const handleAppStateChange = (nextAppState: AppStateStatus) => {
+            console.log('📱 App state changed:', appStateRef.current, '->', nextAppState);
+            
+            if (
+                appStateRef.current.match(/active/) && 
+                (nextAppState === 'background' || nextAppState === 'inactive')
+            ) {
+                // App went to background - end call
+                console.log('📞 App backgrounded, ending call...');
+                handleEndCall(false);
+            }
+            
+            appStateRef.current = nextAppState;
+        };
+
+        const subscription = AppState.addEventListener('change', handleAppStateChange);
+
+        return () => {
+            subscription?.remove();
+        };
+    }, [handleEndCall]);
 
     // Timer for call duration
     useEffect(() => {
@@ -314,26 +407,6 @@ export default function CallScreen() {
         setIsSpeaker(newSpeaker);
         const agora = getAgoraService();
         await agora?.toggleSpeaker?.(newSpeaker);
-    };
-
-    const handleEndCall = async () => {
-        try {
-            const agora = getAgoraService();
-            await agora?.leaveCall?.();
-
-            if (currentCallId) {
-                await endCallSession(currentCallId);
-            }
-        } catch (error) {
-            console.error('Error ending call:', error);
-        } finally {
-            endCall();
-            if (router.canGoBack()) {
-                router.back();
-            } else {
-                router.replace('/(customer)/home');
-            }
-        }
     };
 
     // Make native phone call fallback
@@ -449,7 +522,7 @@ export default function CallScreen() {
                 {/* End Call Button */}
                 <TouchableOpacity
                     style={styles.endCallButton}
-                    onPress={handleEndCall}
+                    onPress={() => handleEndCall(false)}
                     activeOpacity={0.8}
                 >
                     <View style={styles.endCallCircle}>

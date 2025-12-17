@@ -18,6 +18,10 @@ import {
 // Agora App ID from environment
 const AGORA_APP_ID = process.env.EXPO_PUBLIC_AGORA_APP_ID || '';
 
+// Testing mode: Token not required when project is set to "APP ID only" mode
+// For production with "Secured mode", you would need to generate tokens server-side
+const AGORA_TEMP_TOKEN = ''; // Empty for testing mode
+
 // Agora engine instance
 let agoraEngine: IRtcEngine | null = null;
 let isInitialized = false;
@@ -205,6 +209,16 @@ export const setupAgoraListeners = (callbacks: {
             },
             onError: (err: number, msg: string) => {
                 console.error(`❌ Agora error [${err}]: ${msg}`);
+                
+                // Provide specific guidance for common errors
+                if (err === 110) {
+                    console.error('💡 Error 110 = Invalid Token. Check your Agora Console:');
+                    console.error('   1. Go to console.agora.io → Your Project');
+                    console.error('   2. If "App Certificate" is enabled, you need a valid token');
+                    console.error('   3. For testing, generate a temp token in Console → Project → Features');
+                    console.error('   4. Or disable App Certificate for testing without tokens');
+                }
+                
                 callbacks.onError?.(err, msg);
             },
             onConnectionStateChanged: (connection: RtcConnection, state: number, reason: number) => {
@@ -255,9 +269,14 @@ export const joinVoiceCall = async (
         // Enable speaker for loud and clear audio
         engine.setEnableSpeakerphone(true);
 
+        // Use temp token from env, or passed token, or empty for testing
+        const effectiveToken = token || AGORA_TEMP_TOKEN || '';
+        
+        console.log(`🔑 Using token: ${effectiveToken ? 'YES (from env/param)' : 'NO (empty)'}`);
+
         // Join the channel with proper options
         const result = engine.joinChannel(
-            token || '', // Token (empty for testing without token)
+            effectiveToken,
             channelName,
             uid,
             {

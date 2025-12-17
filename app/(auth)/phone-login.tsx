@@ -18,6 +18,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SIZES, FONTS } from '@/constants/theme';
 import { sendOTP, isDevMode } from '@/services/firebase/phoneAuth';
 import { useModal, showErrorModal } from '@/utils/modalService';
+import { checkRateLimit, recordAttempt, recordSuccess } from '@/utils/rateLimiter';
+import { validatePhone } from '@/utils/validation';
 
 export default function PhoneLoginScreen() {
     const router = useRouter();
@@ -25,20 +27,40 @@ export default function PhoneLoginScreen() {
     const [phoneNumber, setPhoneNumber] = useState('');
     const [loading, setLoading] = useState(false);
     const [countryCode] = useState('+92');
+    const [rateLimitMessage, setRateLimitMessage] = useState<string | null>(null);
 
     const handleSendOTP = async () => {
         const cleanNumber = phoneNumber.replace(/\s/g, '');
-        if (cleanNumber.length < 10) {
-            showErrorModal(showModal, 'Invalid Number', 'Please enter a valid phone number');
+        
+        // Validate phone number
+        const validation = validatePhone(cleanNumber);
+        if (!validation.isValid) {
+            showErrorModal(showModal, 'Invalid Number', validation.error || 'Please enter a valid phone number');
             return;
         }
 
+        // Check rate limit
+        const rateCheck = await checkRateLimit('otp_request', cleanNumber);
+        if (!rateCheck.allowed) {
+            setRateLimitMessage(rateCheck.message);
+            showErrorModal(showModal, 'Too Many Attempts', rateCheck.message);
+            return;
+        }
+
+        setRateLimitMessage(null);
         setLoading(true);
+        
+        // Record the attempt
+        await recordAttempt('otp_request', cleanNumber);
+
         try {
             const fullNumber = countryCode + cleanNumber.replace(/^0/, '');
             const result = await sendOTP(fullNumber);
 
             if (result.success) {
+                // Clear rate limit on success
+                await recordSuccess('otp_request', cleanNumber);
+                
                 // Show OTP for development testing
                 if (result.otp) {
                     Alert.alert(
