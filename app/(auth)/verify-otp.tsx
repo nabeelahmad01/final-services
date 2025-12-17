@@ -84,27 +84,37 @@ export default function VerifyOTPScreen() {
             console.log('🔐 OTP Verification Result:', JSON.stringify(result, null, 2));
 
             if (result.success) {
-                // Explicitly check if user is new (isNewUser === true)
-                // If isNewUser is undefined or null, treat as existing user for safety
                 const userIsNew = result.isNewUser === true;
                 
                 console.log('👤 Is New User:', userIsNew);
                 console.log('📱 Phone:', result.phone || phone);
 
                 if (userIsNew) {
-                    // New user - go to profile completion with phone
+                    // New user - go to profile completion
                     console.log('➡️ Navigating to: complete-profile');
                     router.replace({
                         pathname: '/(auth)/complete-profile',
                         params: { phone: result.phone || phone }
                     });
                 } else {
-                    // Existing user - go to password login screen
-                    console.log('➡️ Navigating to: password-login');
-                    router.replace({
-                        pathname: '/(auth)/password-login',
-                        params: { phone: result.phone || phone }
-                    });
+                    // Existing user - auto login (user already signed in via phone auth)
+                    console.log('➡️ Auto-login existing user');
+                    
+                    // Get user data from result
+                    if (result.user) {
+                        setUser(result.user);
+                        
+                        // Navigate based on role
+                        if (result.user.role === 'mechanic') {
+                            router.replace('/(mechanic)/dashboard');
+                        } else if (result.user.role === 'admin') {
+                            router.replace('/(admin)/');
+                        } else {
+                            router.replace('/(customer)/home');
+                        }
+                    } else {
+                        showErrorModal(showModal, 'Error', 'Could not load user profile. Please try again.');
+                    }
                 }
             } else {
                 showErrorModal(showModal, 'Invalid Code', result.error || 'Please check and try again');
@@ -115,6 +125,7 @@ export default function VerifyOTPScreen() {
             setLoading(false);
         }
     };
+
 
 
     const handleResend = async () => {

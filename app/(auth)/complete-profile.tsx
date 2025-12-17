@@ -30,23 +30,12 @@ export default function CompleteProfileScreen() {
 
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
     const [role, setRole] = useState<UserRole | null>(null);
     const [loading, setLoading] = useState(false);
-    const [showPassword, setShowPassword] = useState(false);
 
     const handleComplete = async () => {
         if (!name.trim()) {
             showErrorModal(showModal, 'Required', 'Please enter your name');
-            return;
-        }
-        if (!password || password.length < 6) {
-            showErrorModal(showModal, 'Required', 'Password must be at least 6 characters');
-            return;
-        }
-        if (password !== confirmPassword) {
-            showErrorModal(showModal, 'Error', 'Passwords do not match');
             return;
         }
         if (!role) {
@@ -60,7 +49,6 @@ export default function CompleteProfileScreen() {
                 phone,
                 name: name.trim(),
                 email: email.trim() || undefined,
-                password,
                 role,
             });
 
@@ -194,44 +182,7 @@ export default function CompleteProfileScreen() {
                         </View>
                     </View>
 
-                    {/* Password Input */}
-                    <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Create Password *</Text>
-                        <View style={styles.inputContainer}>
-                            <Ionicons name="lock-closed-outline" size={20} color={COLORS.textSecondary} />
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Min 6 characters"
-                                placeholderTextColor={COLORS.textSecondary}
-                                value={password}
-                                onChangeText={setPassword}
-                                secureTextEntry={!showPassword}
-                            />
-                            <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                                <Ionicons
-                                    name={showPassword ? "eye-off" : "eye"}
-                                    size={20}
-                                    color={COLORS.textSecondary}
-                                />
-                            </TouchableOpacity>
-                        </View>
-                    </View>
 
-                    {/* Confirm Password */}
-                    <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Confirm Password *</Text>
-                        <View style={styles.inputContainer}>
-                            <Ionicons name="lock-closed-outline" size={20} color={COLORS.textSecondary} />
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Re-enter password"
-                                placeholderTextColor={COLORS.textSecondary}
-                                value={confirmPassword}
-                                onChangeText={setConfirmPassword}
-                                secureTextEntry={!showPassword}
-                            />
-                        </View>
-                    </View>
 
                     {/* Role Selection */}
                     <View style={styles.inputGroup}>
@@ -264,10 +215,10 @@ export default function CompleteProfileScreen() {
                     <TouchableOpacity
                         style={[
                             styles.completeButton,
-                            (!name.trim() || !password || !role) && styles.completeButtonDisabled
+                            (!name.trim() || !role) && styles.completeButtonDisabled
                         ]}
                         onPress={handleComplete}
-                        disabled={loading || !name.trim() || !password || !role}
+                        disabled={loading || !name.trim() || !role}
                     >
                         {loading ? (
                             <ActivityIndicator color={COLORS.white} />

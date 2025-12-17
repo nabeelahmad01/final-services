@@ -17,6 +17,7 @@ export interface User {
     email: string;
     phone: string;
     profilePic?: string;
+    emailVerified?: boolean;
     createdAt: Date;
 }
 

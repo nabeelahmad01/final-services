@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -6,6 +6,7 @@ import {
     ScrollView,
     TouchableOpacity,
     Switch,
+    ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -14,20 +15,76 @@ import { COLORS, SIZES } from '@/constants/theme';
 import { useAuthStore } from '@/stores/authStore';
 import { signOut } from '@/services/firebase/authService';
 import { Card } from '@/components/ui/Card';
+import { doc, getDoc, updateDoc, deleteDoc, collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
+import { firestore, auth } from '@/services/firebase/config';
+import { deleteUser } from 'firebase/auth';
+import Constants from 'expo-constants';
 
 import { useTranslation } from 'react-i18next';
 import { useThemeStore } from '@/stores/themeStore';
-import { useModal, showConfirmModal, showInfoModal } from '@/utils/modalService';
+import { useModal, showConfirmModal, showSuccessModal, showErrorModal } from '@/utils/modalService';
 
 export default function Settings() {
     const { t, i18n } = useTranslation();
     const { mode, setMode } = useThemeStore();
     const router = useRouter();
-    const { setUser } = useAuthStore();
+    const { user, setUser } = useAuthStore();
     const { showModal } = useModal();
     const [pushNotifications, setPushNotifications] = useState(true);
     const [emailNotifications, setEmailNotifications] = useState(false);
     const [smsNotifications, setSmsNotifications] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [deleting, setDeleting] = useState(false);
+
+    // Load notification settings from Firestore
+    useEffect(() => {
+        const loadSettings = async () => {
+            if (!user?.id) return;
+            try {
+                const collectionName = user.role === 'mechanic' ? 'mechanics' : 'customers';
+                const docRef = doc(firestore, collectionName, user.id);
+                const docSnap = await getDoc(docRef);
+                
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    setPushNotifications(data.pushNotifications ?? true);
+                    setEmailNotifications(data.emailNotifications ?? false);
+                    setSmsNotifications(data.smsNotifications ?? false);
+                }
+            } catch (error) {
+                console.error('Error loading settings:', error);
+            }
+        };
+        loadSettings();
+    }, [user?.id]);
+
+    // Save notification setting to Firestore
+    const saveNotificationSetting = async (key: string, value: boolean) => {
+        if (!user?.id) return;
+        try {
+            const collectionName = user.role === 'mechanic' ? 'mechanics' : 'customers';
+            await updateDoc(doc(firestore, collectionName, user.id), {
+                [key]: value,
+            });
+        } catch (error) {
+            console.error('Error saving setting:', error);
+        }
+    };
+
+    const handlePushNotificationChange = (value: boolean) => {
+        setPushNotifications(value);
+        saveNotificationSetting('pushNotifications', value);
+    };
+
+    const handleEmailNotificationChange = (value: boolean) => {
+        setEmailNotifications(value);
+        saveNotificationSetting('emailNotifications', value);
+    };
+
+    const handleSmsNotificationChange = (value: boolean) => {
+        setSmsNotifications(value);
+        saveNotificationSetting('smsNotifications', value);
+    };
 
     const handleLogout = () => {
         showConfirmModal(
@@ -49,16 +106,88 @@ export default function Settings() {
         showConfirmModal(
             showModal,
             'Delete Account',
-            'Are you sure? This action cannot be undone. All your data will be permanently deleted.',
-            () => {
-                // TODO: Implement account deletion
-                showInfoModal(showModal, 'Coming Soon', 'Account deletion feature will be available soon');
+            'Are you sure? This action cannot be undone. All your data including bookings, reviews, and transactions will be permanently deleted.',
+            async () => {
+                setDeleting(true);
+                try {
+                    if (!user?.id) throw new Error('User not found');
+
+                    const batch = writeBatch(firestore);
+                    const collectionName = user.role === 'mechanic' ? 'mechanics' : 'customers';
+
+                    // Delete user's notifications
+                    const notificationsQuery = query(
+                        collection(firestore, 'notifications'),
+                        where('userId', '==', user.id)
+                    );
+                    const notificationsSnap = await getDocs(notificationsQuery);
+                    notificationsSnap.docs.forEach(doc => batch.delete(doc.ref));
+
+                    // Delete user's proposals (for mechanics)
+                    if (user.role === 'mechanic') {
+                        const proposalsQuery = query(
+                            collection(firestore, 'proposals'),
+                            where('mechanicId', '==', user.id)
+                        );
+                        const proposalsSnap = await getDocs(proposalsQuery);
+                        proposalsSnap.docs.forEach(doc => batch.delete(doc.ref));
+                    }
+
+                    // Delete user's service requests (for customers)
+                    if (user.role === 'customer') {
+                        const requestsQuery = query(
+                            collection(firestore, 'serviceRequests'),
+                            where('customerId', '==', user.id)
+                        );
+                        const requestsSnap = await getDocs(requestsQuery);
+                        requestsSnap.docs.forEach(doc => batch.delete(doc.ref));
+                    }
+
+                    // Delete main user document
+                    batch.delete(doc(firestore, collectionName, user.id));
+
+                    // Commit batch delete
+                    await batch.commit();
+
+                    // Delete Firebase Auth user
+                    const currentUser = auth.currentUser;
+                    if (currentUser) {
+                        await deleteUser(currentUser);
+                    }
+
+                    setUser(null);
+                    showSuccessModal(
+                        showModal,
+                        'Account Deleted',
+                        'Your account has been permanently deleted.',
+                        () => router.replace('/(auth)/role-selection')
+                    );
+                } catch (error: any) {
+                    console.error('Error deleting account:', error);
+                    if (error.code === 'auth/requires-recent-login') {
+                        showErrorModal(
+                            showModal,
+                            'Re-authentication Required',
+                            'Please log out and log in again before deleting your account.'
+                        );
+                    } else {
+                        showErrorModal(
+                            showModal,
+                            'Error',
+                            error.message || 'Failed to delete account. Please try again.'
+                        );
+                    }
+                } finally {
+                    setDeleting(false);
+                }
             },
             undefined,
             'Delete',
             'Cancel'
         );
     };
+
+    const appVersion = Constants.expoConfig?.version || '1.0.0';
 
     const SettingItem = ({
         icon,
@@ -67,6 +196,7 @@ export default function Settings() {
         onPress,
         showArrow = true,
         rightElement,
+        badge,
     }: {
         icon: string;
         title: string;
@@ -74,6 +204,7 @@ export default function Settings() {
         onPress?: () => void;
         showArrow?: boolean;
         rightElement?: React.ReactNode;
+        badge?: string;
     }) => (
         <TouchableOpacity
             style={styles.settingItem}
@@ -86,7 +217,14 @@ export default function Settings() {
                     <Ionicons name={icon as any} size={24} color={COLORS.primary} />
                 </View>
                 <View style={styles.settingText}>
-                    <Text style={styles.settingTitle}>{title}</Text>
+                    <View style={styles.titleRow}>
+                        <Text style={styles.settingTitle}>{title}</Text>
+                        {badge && (
+                            <View style={styles.badge}>
+                                <Text style={styles.badgeText}>{badge}</Text>
+                            </View>
+                        )}
+                    </View>
                     {subtitle && <Text style={styles.settingSubtitle}>{subtitle}</Text>}
                 </View>
             </View>
@@ -118,12 +256,14 @@ export default function Settings() {
                         onPress={() => router.push('/(shared)/edit-profile')}
                     />
                     <SettingItem
-                        icon="lock-closed-outline"
-                        title="Change Password"
-                        subtitle="Update your password"
-                        onPress={() => showInfoModal(showModal, 'Coming Soon', 'Password change feature will be available soon')}
+                        icon="mail-outline"
+                        title="Verify Email"
+                        subtitle={user?.emailVerified ? 'Email verified' : 'Verify your email address'}
+                        badge={user?.emailVerified ? '✓' : undefined}
+                        onPress={() => router.push('/(shared)/verify-email')}
                     />
                 </Card>
+
 
                 {/* Notification Preferences */}
                 <Text style={styles.sectionTitle}>Notifications</Text>
@@ -136,7 +276,7 @@ export default function Settings() {
                         rightElement={
                             <Switch
                                 value={pushNotifications}
-                                onValueChange={setPushNotifications}
+                                onValueChange={handlePushNotificationChange}
                                 trackColor={{ false: COLORS.border, true: COLORS.primary + '50' }}
                                 thumbColor={pushNotifications ? COLORS.primary : COLORS.textSecondary}
                             />
@@ -150,7 +290,7 @@ export default function Settings() {
                         rightElement={
                             <Switch
                                 value={emailNotifications}
-                                onValueChange={setEmailNotifications}
+                                onValueChange={handleEmailNotificationChange}
                                 trackColor={{ false: COLORS.border, true: COLORS.primary + '50' }}
                                 thumbColor={emailNotifications ? COLORS.primary : COLORS.textSecondary}
                             />
@@ -164,7 +304,7 @@ export default function Settings() {
                         rightElement={
                             <Switch
                                 value={smsNotifications}
-                                onValueChange={setSmsNotifications}
+                                onValueChange={handleSmsNotificationChange}
                                 trackColor={{ false: COLORS.border, true: COLORS.primary + '50' }}
                                 thumbColor={smsNotifications ? COLORS.primary : COLORS.textSecondary}
                             />
@@ -178,12 +318,12 @@ export default function Settings() {
                     <SettingItem
                         icon="shield-outline"
                         title="Privacy Policy"
-                        onPress={() => showInfoModal(showModal, 'Privacy Policy', 'Privacy policy content will be displayed here')}
+                        onPress={() => router.push('/(shared)/privacy-policy')}
                     />
                     <SettingItem
                         icon="document-text-outline"
                         title="Terms of Service"
-                        onPress={() => showInfoModal(showModal, 'Terms of Service', 'Terms of service content will be displayed here')}
+                        onPress={() => router.push('/(shared)/terms-service')}
                     />
                 </Card>
 
@@ -214,13 +354,18 @@ export default function Settings() {
                     <SettingItem
                         icon="information-circle-outline"
                         title="App Version"
-                        subtitle="1.0.0"
+                        subtitle={appVersion}
                         showArrow={false}
                     />
                     <SettingItem
                         icon="help-circle-outline"
                         title="Help & Support"
-                        onPress={() => showInfoModal(showModal, 'Help & Support', 'Support information will be available soon')}
+                        onPress={() => router.push('/(shared)/help-support')}
+                    />
+                    <SettingItem
+                        icon="information-circle-outline"
+                        title="About FixKar"
+                        onPress={() => router.push('/(shared)/about')}
                     />
                 </Card>
 
@@ -242,10 +387,15 @@ export default function Settings() {
                         style={styles.dangerItem}
                         onPress={handleDeleteAccount}
                         activeOpacity={0.7}
+                        disabled={deleting}
                     >
-                        <Ionicons name="trash-outline" size={24} color={COLORS.danger} />
+                        {deleting ? (
+                            <ActivityIndicator size="small" color={COLORS.danger} />
+                        ) : (
+                            <Ionicons name="trash-outline" size={24} color={COLORS.danger} />
+                        )}
                         <Text style={[styles.settingTitle, { color: COLORS.danger }]}>
-                            Delete Account
+                            {deleting ? 'Deleting...' : 'Delete Account'}
                         </Text>
                     </TouchableOpacity>
                 </Card>
@@ -318,10 +468,26 @@ const styles = StyleSheet.create({
     settingText: {
         flex: 1,
     },
+    titleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
     settingTitle: {
         fontSize: SIZES.base,
         fontWeight: '600',
         color: COLORS.text,
+    },
+    badge: {
+        backgroundColor: COLORS.success,
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 10,
+    },
+    badgeText: {
+        fontSize: 10,
+        fontWeight: 'bold',
+        color: COLORS.white,
     },
     settingSubtitle: {
         fontSize: SIZES.sm,

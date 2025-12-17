@@ -205,7 +205,7 @@ export const sendOTP = async (
  */
 export const verifyOTP = async (
     otp: string
-): Promise<{ success: boolean; phone?: string; isNewUser?: boolean; error?: string }> => {
+): Promise<{ success: boolean; phone?: string; isNewUser?: boolean; user?: User; error?: string }> => {
     try {
         console.log('🔐 Verifying OTP...');
 
@@ -259,13 +259,6 @@ export const verifyOTP = async (
 
         console.log('🔍 Mechanics found:', mechanicsSnap.size);
         console.log('🔍 Customers found:', customersSnap.size);
-        
-        if (!mechanicsSnap.empty) {
-            console.log('🔍 Mechanic IDs:', mechanicsSnap.docs.map(d => d.id));
-        }
-        if (!customersSnap.empty) {
-            console.log('🔍 Customer IDs:', customersSnap.docs.map(d => d.id));
-        }
 
         const isNewUser = mechanicsSnap.empty && customersSnap.empty;
 
@@ -276,14 +269,51 @@ export const verifyOTP = async (
         // Clear verification state
         pendingVerification = null;
 
-        return { success: true, phone, isNewUser };
+        // For existing users, return their user data for auto-login
+        if (!isNewUser) {
+            let userData: User | undefined;
+            
+            if (!mechanicsSnap.empty) {
+                const doc = mechanicsSnap.docs[0];
+                const data = doc.data();
+                userData = {
+                    id: doc.id,
+                    name: data.name,
+                    email: data.email || '',
+                    phone: data.phone,
+                    role: 'mechanic' as UserRole,
+                    profilePic: data.profilePic,
+                    emailVerified: data.emailVerified,
+                    createdAt: data.createdAt?.toDate() || new Date(),
+                };
+                console.log('✅ Found existing mechanic:', userData.name);
+            } else if (!customersSnap.empty) {
+                const doc = customersSnap.docs[0];
+                const data = doc.data();
+                userData = {
+                    id: doc.id,
+                    name: data.name,
+                    email: data.email || '',
+                    phone: data.phone,
+                    role: 'customer' as UserRole,
+                    profilePic: data.profilePic,
+                    emailVerified: data.emailVerified,
+                    createdAt: data.createdAt?.toDate() || new Date(),
+                };
+                console.log('✅ Found existing customer:', userData.name);
+            }
+            
+            return { success: true, phone, isNewUser: false, user: userData };
+        }
 
+        return { success: true, phone, isNewUser: true };
 
     } catch (error: any) {
         console.error('❌ Error verifying OTP:', error);
         return { success: false, error: error.message || 'Verification failed' };
     }
 };
+
 
 /**
  * Resend OTP to the same phone number
@@ -298,37 +328,64 @@ export const resendOTP = async (): Promise<{ success: boolean; otp?: string; err
 };
 
 /**
- * Complete user profile after phone verification
+ * Complete user profile after phone verification (Phone-only auth - no password)
+ * Uses the currently signed-in Firebase Phone Auth user
  */
 export const completeProfile = async ({
     phone,
     name,
     email,
-    password,
     role,
 }: {
     phone: string;
     name: string;
     email?: string;
-    password: string;
     role: UserRole;
 }): Promise<{ success: boolean; user?: User; error?: string }> => {
     try {
         console.log('📝 Creating profile for phone:', phone);
 
         const formattedPhone = formatPhoneNumber(phone);
-        const userEmail = email || `${formattedPhone.replace(/\+/g, '')}@fixkar.app`;
-
-        const userCredential = await createUserWithEmailAndPassword(auth, userEmail, password);
-        const firebaseUser = userCredential.user;
-
-        await updateProfile(firebaseUser, { displayName: name });
+        
+        // Get the current Firebase Phone Auth user (already signed in after OTP verification)
+        let firebaseUser: FirebaseUser | null = null;
+        
+        // Try native Firebase first
+        if (firebaseAuth && nativeFirebaseAvailable) {
+            const nativeUser = firebaseAuth().currentUser;
+            if (nativeUser) {
+                console.log('✅ Using native Firebase user:', nativeUser.uid);
+                firebaseUser = nativeUser as any;
+            }
+        }
+        
+        // Fallback to web Firebase
+        if (!firebaseUser && auth.currentUser) {
+            firebaseUser = auth.currentUser;
+            console.log('✅ Using web Firebase user:', firebaseUser.uid);
+        }
+        
+        // If no Firebase user, create a document ID based on phone (dev mode)
+        let userId: string;
+        if (firebaseUser) {
+            userId = firebaseUser.uid;
+            // Update display name if possible
+            try {
+                await updateProfile(firebaseUser, { displayName: name });
+            } catch (e) {
+                console.log('Could not update display name:', e);
+            }
+        } else {
+            // For dev mode without real Firebase auth, generate a unique ID
+            userId = `phone_${formattedPhone.replace(/\+/g, '')}`;
+            console.log('⚠️ No Firebase user, using generated ID:', userId);
+        }
 
         const userData: User = {
-            id: firebaseUser.uid,
+            id: userId,
             name,
-            email: email || '',
-            phone: formattedPhone,
+            email: email || '', // Only store if user provided
+            phone: formattedPhone, // Just the phone number, no fake email
             role,
             createdAt: new Date(),
         };
@@ -350,18 +407,20 @@ export const completeProfile = async ({
                 emailVerified: false,
                 kycStatus: 'pending',
             };
-            await setDoc(doc(firestore, collectionName, firebaseUser.uid), {
+            await setDoc(doc(firestore, collectionName, userId), {
                 ...mechanicData,
                 createdAt: Timestamp.fromDate(userData.createdAt),
             });
         } else {
-            await setDoc(doc(firestore, collectionName, firebaseUser.uid), {
+            await setDoc(doc(firestore, collectionName, userId), {
                 ...userData,
+                emailVerified: false,
                 createdAt: Timestamp.fromDate(userData.createdAt),
             });
         }
 
-        if (email && !email.endsWith('@fixkar.app')) {
+        // Send email verification if real email provided
+        if (email && firebaseUser && firebaseUser.email) {
             try {
                 await sendEmailVerification(firebaseUser);
                 console.log('📧 Verification email sent');
@@ -375,17 +434,10 @@ export const completeProfile = async ({
 
     } catch (error: any) {
         console.error('❌ Error completing profile:', error);
-
-        let errorMessage = error.message;
-        if (error.code === 'auth/email-already-in-use') {
-            errorMessage = 'This phone number is already registered. Please login instead.';
-        } else if (error.code === 'auth/weak-password') {
-            errorMessage = 'Password is too weak. Please use at least 6 characters.';
-        }
-
-        return { success: false, error: errorMessage };
+        return { success: false, error: error.message || 'Failed to create profile' };
     }
 };
+
 
 /**
  * Login existing user with phone and password
