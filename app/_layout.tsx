@@ -140,16 +140,39 @@ export default function RootLayout() {
                     return () => { };
                 }
 
+                // Get all mechanic's categories
+                const categories = mechanic.categories || [];
+                
+                if (categories.length === 0) {
+                    console.log('⚠️ Mechanic has no categories selected');
+                    return () => { };
+                }
+
                 console.log('🔧 Subscribing to service requests for mechanic:', user.id);
+                console.log('🔧 Mechanic categories:', categories);
 
-                // Get mechanic's first category or default to car_mechanic
-                const category = mechanic.categories?.[0] || 'car_mechanic';
+                // Subscribe to ALL categories the mechanic has selected
+                const allRequests: Map<string, any> = new Map();
+                const unsubscribers: (() => void)[] = [];
 
-                const unsubscribe = subscribeToServiceRequests(category, (requests: any[]) => {
-                    setPendingRequests(requests);
+                categories.forEach((category: any) => {
+                    const unsubscribe = subscribeToServiceRequests(category as any, (categoryRequests: any[]) => {
+                        // Merge requests from this category
+                        categoryRequests.forEach(req => allRequests.set(req.id, req));
+                        
+                        // Convert map to array and sort by date
+                        const mergedRequests = Array.from(allRequests.values())
+                            .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+                        
+                        setPendingRequests(mergedRequests);
+                    });
+                    unsubscribers.push(unsubscribe);
                 });
 
-                return unsubscribe;
+                // Return cleanup function that unsubscribes from all categories
+                return () => {
+                    unsubscribers.forEach(unsub => unsub());
+                };
             } catch (error) {
                 console.error('Error checking mechanic eligibility:', error);
                 return () => { };
@@ -165,6 +188,7 @@ export default function RootLayout() {
             if (unsubscribe) unsubscribe();
         };
     }, [user?.id, user?.role]);
+
 
     // Subscribe to notifications and show banners for new ones
     useEffect(() => {

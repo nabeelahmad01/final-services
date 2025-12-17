@@ -250,10 +250,22 @@ export const verifyOTP = async (
         }
 
         // Check if user exists with this phone
+        console.log('🔍 Checking if user exists with phone:', phone);
+        
         const [mechanicsSnap, customersSnap] = await Promise.all([
             getDocs(query(collection(firestore, 'mechanics'), where('phone', '==', phone))),
             getDocs(query(collection(firestore, 'customers'), where('phone', '==', phone)))
         ]);
+
+        console.log('🔍 Mechanics found:', mechanicsSnap.size);
+        console.log('🔍 Customers found:', customersSnap.size);
+        
+        if (!mechanicsSnap.empty) {
+            console.log('🔍 Mechanic IDs:', mechanicsSnap.docs.map(d => d.id));
+        }
+        if (!customersSnap.empty) {
+            console.log('🔍 Customer IDs:', customersSnap.docs.map(d => d.id));
+        }
 
         const isNewUser = mechanicsSnap.empty && customersSnap.empty;
 
@@ -265,6 +277,7 @@ export const verifyOTP = async (
         pendingVerification = null;
 
         return { success: true, phone, isNewUser };
+
 
     } catch (error: any) {
         console.error('❌ Error verifying OTP:', error);

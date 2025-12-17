@@ -81,15 +81,26 @@ export default function VerifyOTPScreen() {
         try {
             const result = await verifyOTP(code);
 
+            console.log('🔐 OTP Verification Result:', JSON.stringify(result, null, 2));
+
             if (result.success) {
-                if (result.isNewUser) {
+                // Explicitly check if user is new (isNewUser === true)
+                // If isNewUser is undefined or null, treat as existing user for safety
+                const userIsNew = result.isNewUser === true;
+                
+                console.log('👤 Is New User:', userIsNew);
+                console.log('📱 Phone:', result.phone || phone);
+
+                if (userIsNew) {
                     // New user - go to profile completion with phone
+                    console.log('➡️ Navigating to: complete-profile');
                     router.replace({
                         pathname: '/(auth)/complete-profile',
                         params: { phone: result.phone || phone }
                     });
                 } else {
                     // Existing user - go to password login screen
+                    console.log('➡️ Navigating to: password-login');
                     router.replace({
                         pathname: '/(auth)/password-login',
                         params: { phone: result.phone || phone }
@@ -104,6 +115,7 @@ export default function VerifyOTPScreen() {
             setLoading(false);
         }
     };
+
 
     const handleResend = async () => {
         if (!canResend) return;
