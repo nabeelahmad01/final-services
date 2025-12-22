@@ -159,6 +159,10 @@ export default function TrackingScreen() {
         );
     };
 
+    const handleSafety = () => {
+        router.push('/(shared)/safety');
+    };
+
     if (!activeBooking || !mechanic) return null;
 
     return (
@@ -248,7 +252,7 @@ export default function TrackingScreen() {
                             <Text style={styles.actionLabel}>Call</Text>
                         </TouchableOpacity>
 
-                        <TouchableOpacity style={styles.actionButton}>
+                        <TouchableOpacity style={styles.actionButton} onPress={handleSafety}>
                             <View style={[styles.actionIcon, { backgroundColor: COLORS.danger }]}>
                                 <Ionicons name="shield-checkmark" size={24} color={COLORS.white} />
                             </View>
