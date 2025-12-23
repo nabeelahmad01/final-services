@@ -526,6 +526,17 @@ export const getTransactions = async (userId: string): Promise<Transaction[]> =>
     })) as Transaction[];
 };
 
+// Update transaction status (for payment callbacks)
+export const updateTransactionStatus = async (
+    transactionId: string,
+    status: Transaction['status']
+) => {
+    await updateDoc(doc(firestore, 'transactions', transactionId), {
+        status,
+        updatedAt: Timestamp.now(),
+    });
+};
+
 // Chat
 export const createOrGetChat = async (
     participant1: string,
