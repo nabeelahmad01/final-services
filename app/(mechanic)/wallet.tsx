@@ -180,10 +180,17 @@ export default function WalletScreen() {
               style={styles.paymentButton}
             />
             <Button
-              title="Pay with EasyPaisa"
-              onPress={() => handlePurchase("easypaisa")}
-              loading={loading}
+              title="EasyPaisa (Coming Soon)"
+              onPress={() =>
+                showErrorModal(
+                  showModal,
+                  "Coming Soon",
+                  "EasyPaisa payment will be available soon!"
+                )
+              }
+              loading={false}
               variant="secondary"
+              disabled={true}
               icon={
                 <Ionicons name="card-outline" size={20} color={COLORS.white} />
               }

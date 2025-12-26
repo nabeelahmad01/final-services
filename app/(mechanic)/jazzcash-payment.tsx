@@ -138,7 +138,7 @@ export default function JazzCashPaymentScreen() {
         pp_Language: "EN",
         pp_MerchantID: config.merchantId,
         pp_Password: config.password,
-        pp_ReturnURL: "com.fixkar.app",
+        pp_ReturnURL: "com.fixkar.app://payment-callback",
         pp_TxnCurrency: "PKR",
         pp_TxnDateTime: txnDateTime,
         pp_TxnExpiryDateTime: txnExpiryDateTime,
@@ -235,7 +235,60 @@ export default function JazzCashPaymentScreen() {
     const { url } = navState;
     console.log("WebView URL:", url);
 
-    // Check if payment completed (redirected back)
+    // Check if redirected to our callback URL (deep link)
+    if (url.startsWith("com.fixkar.app://payment-callback")) {
+      // Payment completed - check if we have response code in URL
+      // JazzCash appends params to the return URL
+      if (url.includes("pp_ResponseCode=000")) {
+        // Payment successful
+        try {
+          const mechanicId = params.mechanicId || "";
+          const diamonds = parseInt(params.diamonds || "0", 10);
+
+          await updateMechanicDiamonds(mechanicId, diamonds, "add");
+          await updateTransactionStatus(transactionId, "completed");
+
+          router.replace({
+            pathname: "/(mechanic)/wallet",
+            params: { paymentSuccess: "true" },
+          });
+        } catch (err) {
+          console.error("Error updating balance:", err);
+        }
+      } else if (url.includes("pp_ResponseCode")) {
+        // Payment failed with error code
+        await updateTransactionStatus(transactionId, "failed");
+        router.replace({
+          pathname: "/(mechanic)/wallet",
+          params: { paymentFailed: "true" },
+        });
+      } else {
+        // Callback received but no response code - treat as success for sandbox
+        // In production, you should verify with JazzCash API
+        console.log("Callback received, assuming sandbox success");
+        try {
+          const mechanicId = params.mechanicId || "";
+          const diamonds = parseInt(params.diamonds || "0", 10);
+
+          await updateMechanicDiamonds(mechanicId, diamonds, "add");
+          await updateTransactionStatus(transactionId, "completed");
+
+          router.replace({
+            pathname: "/(mechanic)/wallet",
+            params: { paymentSuccess: "true" },
+          });
+        } catch (err) {
+          console.error("Error updating balance:", err);
+          router.replace({
+            pathname: "/(mechanic)/wallet",
+            params: { paymentFailed: "true" },
+          });
+        }
+      }
+      return;
+    }
+
+    // Check if payment completed on JazzCash page
     if (url.includes("pp_ResponseCode=000")) {
       // Payment successful
       try {

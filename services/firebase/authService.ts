@@ -50,8 +50,11 @@ export const signUp = async ({
                 categories: [],
                 rating: 0,
                 totalRatings: 0,
+                ratingCount: 0,
+                totalRating: 0,
                 completedJobs: 0,
                 diamondBalance: 0,
+                totalEarnings: 0,
                 isVerified: false,
                 kycStatus: 'pending',
             };

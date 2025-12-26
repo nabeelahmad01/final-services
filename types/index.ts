@@ -21,6 +21,17 @@ export interface User {
     createdAt: Date;
 }
 
+export interface Customer extends User {
+    savedAddresses?: {
+        id: string;
+        label: string;
+        address: string;
+        latitude: number;
+        longitude: number;
+    }[];
+    favoriteMechanics?: string[];
+}
+
 export interface Mechanic extends User {
     categories: ServiceCategory[];
     rating: number;

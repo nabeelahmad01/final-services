@@ -79,3 +79,21 @@ export const uploadProfilePic = async (userId: string, uri: string): Promise<str
     const path = `profilePics/${userId}_${Date.now()}.jpg`;
     return uploadImage(uri, path);
 };
+
+/**
+ * Uploads a job photo (before/after)
+ * @param bookingId The booking ID
+ * @param photoType 'before' or 'after'
+ * @param uri The local URI of the image
+ * @param index The photo index
+ * @returns The download URL of the uploaded photo
+ */
+export const uploadJobPhoto = async (
+    bookingId: string, 
+    photoType: 'before' | 'after', 
+    uri: string, 
+    index: number
+): Promise<string> => {
+    const path = `bookings/${bookingId}/${photoType}/${index}_${Date.now()}.jpg`;
+    return uploadImage(uri, path);
+};
