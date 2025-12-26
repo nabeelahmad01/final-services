@@ -102,6 +102,13 @@ export default function MechanicLayout() {
                     href: null,
                 }}
             />
+            <Tabs.Screen
+                name="jazzcash-payment"
+                options={{
+                    href: null,
+                }}
+            />
+
         </Tabs>
     );
 }
