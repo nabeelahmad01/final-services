@@ -76,10 +76,9 @@
         "origin": false
       },
       "eas": {
-        "projectId": "0b5c778d-4bf3-4859-abc4-06ed5773f8e6"
+        "projectId": "597af1dc-ab4d-4a96-b323-1a87a642fff0"
       }
     },
-    "runtimeVersion": "1.0.0",
-    "owner": "nabeel634"
+    "runtimeVersion": "1.0.0"
   }
 }

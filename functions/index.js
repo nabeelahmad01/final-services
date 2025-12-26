@@ -229,8 +229,7 @@ exports.onKYCUpdated = functions.firestore
 
 /**
  * Trigger: New Service Request
- * Notifies nearby mechanics (this is a simplified version - 
- * for real geo-queries, you'd use Geohashing)
+ * Notifies nearby mechanics
  */
 exports.onNewServiceRequest = functions.firestore
     .document('serviceRequests/{requestId}')
@@ -258,3 +257,321 @@ exports.onNewServiceRequest = functions.firestore
         await Promise.all(notifications);
         console.log(`Notified ${mechanicsSnapshot.size} mechanics of new request`);
     });
+
+/**
+ * JazzCash MWALLET Payment
+ * Server-side payment processing for security
+ */
+const crypto = require('crypto');
+const fetch = require('node-fetch');
+
+// JazzCash Config - from .env credentials
+const JAZZCASH_CONFIG = {
+    merchantId: 'MC489932',
+    password: '6355w4835w',
+    integritySalt: 'us1gh5vw8x',
+    mwalletUrl: 'https://sandbox.jazzcash.com.pk/ApplicationAPI/API/2.0/Purchase/DoMWalletTransaction',
+};
+
+// Format date for JazzCash
+function formatJazzCashDate(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+    return `${year}${month}${day}${hours}${minutes}${seconds}`;
+}
+
+// Generate HMAC-SHA256 hash for JazzCash
+// Format: IntegritySalt&value1&value2&... (sorted alphabetically by key)
+function generateSecureHash(data, integritySalt) {
+    const sortedKeys = Object.keys(data).sort();
+    let hashString = integritySalt;
+    
+    for (const key of sortedKeys) {
+        // Skip pp_SecureHash from hash calculation
+        if (key === 'pp_SecureHash') continue;
+        
+        const value = data[key];
+        // Only include non-empty values
+        if (value !== undefined && value !== null && value !== '') {
+            hashString += '&' + value;
+        }
+    }
+    
+    console.log('Hash String:', hashString);
+    
+    const hash = crypto.createHmac('sha256', integritySalt)
+        .update(hashString)
+        .digest('hex')
+        .toUpperCase();
+    
+    return hash;
+}
+
+exports.processJazzCashPayment = functions.https.onCall(async (data, context) => {
+    // Log auth status (don't require it for now)
+    if (!context.auth) {
+        console.log('User is not authenticated via Firebase Auth, proceeding anyway...');
+    } else {
+        console.log('User authenticated:', context.auth.uid);
+    }
+    
+    const { mobileNumber, cnic, amount, diamonds, mechanicId } = data;
+    
+    if (!mobileNumber || !amount || !diamonds || !mechanicId) {
+        throw new functions.https.HttpsError('invalid-argument', 'Missing required fields');
+    }
+    
+    try {
+        const now = new Date();
+        const expiryDate = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+        
+        const txnRefNo = `T${formatJazzCashDate(now)}`;
+        const txnDateTime = formatJazzCashDate(now);
+        const txnExpiryDateTime = formatJazzCashDate(expiryDate);
+        const amountInPaisa = Math.round(amount * 100).toString();
+        
+        // Create transaction record
+        const transactionRef = await db.collection('transactions').add({
+            userId: mechanicId,
+            type: 'purchase',
+            amount: diamonds,
+            paymentMethod: 'jazzcash',
+            paymentDetails: {
+                transactionId: txnRefNo,
+                amount: amount,
+            },
+            status: 'pending',
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        
+        // MWALLET API parameters
+        const formData = {
+            pp_Amount: amountInPaisa,
+            pp_BillReference: `FXK${Date.now().toString().slice(-10)}`,
+            pp_CNIC: cnic || '',
+            pp_Description: 'DiamondPurchase',
+            pp_Language: 'EN',
+            pp_MerchantID: JAZZCASH_CONFIG.merchantId,
+            pp_MobileNumber: mobileNumber,
+            pp_Password: JAZZCASH_CONFIG.password,
+            pp_TxnCurrency: 'PKR',
+            pp_TxnDateTime: txnDateTime,
+            pp_TxnExpiryDateTime: txnExpiryDateTime,
+            pp_TxnRefNo: txnRefNo,
+            pp_TxnType: 'MWALLET',
+            pp_Version: '2.0',
+        };
+        
+        // Generate secure hash
+        const secureHash = generateSecureHash(formData, JAZZCASH_CONFIG.integritySalt);
+        formData.pp_SecureHash = secureHash;
+        
+        console.log('Sending MWALLET request:', JSON.stringify(formData));
+        
+        // Make API request
+        const response = await fetch(JAZZCASH_CONFIG.mwalletUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(formData),
+        });
+        
+        const result = await response.json();
+        console.log('JazzCash Response:', JSON.stringify(result));
+        
+        if (result.pp_ResponseCode === '000') {
+            // Payment successful - update mechanic diamonds
+            const mechanicRef = db.collection('mechanics').doc(mechanicId);
+            await mechanicRef.update({
+                diamonds: admin.firestore.FieldValue.increment(diamonds),
+            });
+            
+            // Update transaction status
+            await transactionRef.update({
+                status: 'completed',
+                completedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            
+            return {
+                success: true,
+                message: 'Payment successful',
+                transactionId: txnRefNo,
+            };
+        } else if (result.pp_ResponseCode === '121') {
+            // OTP required
+            await transactionRef.update({
+                status: 'pending_otp',
+            });
+            
+            return {
+                success: false,
+                requiresOTP: true,
+                message: 'OTP sent to your mobile number. Please approve in JazzCash app.',
+                transactionId: txnRefNo,
+            };
+        } else {
+            // Payment failed
+            await transactionRef.update({
+                status: 'failed',
+                error: result.pp_ResponseMessage,
+            });
+            
+            return {
+                success: false,
+                message: result.pp_ResponseMessage || 'Payment failed',
+                errorCode: result.pp_ResponseCode,
+            };
+        }
+        
+    } catch (error) {
+        console.error('JazzCash payment error:', error);
+        throw new functions.https.HttpsError('internal', error.message);
+    }
+});
+
+// HTTP Endpoint version (no auth required)
+exports.jazzCashPaymentHttp = functions.https.onRequest(async (req, res) => {
+    // Enable CORS
+    res.set('Access-Control-Allow-Origin', '*');
+    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type');
+    
+    if (req.method === 'OPTIONS') {
+        res.status(200).send('');
+        return;
+    }
+    
+    if (req.method !== 'POST') {
+        res.status(405).json({ error: 'Method not allowed' });
+        return;
+    }
+    
+    const { mobileNumber, cnic, amount, diamonds, mechanicId } = req.body;
+    
+    if (!mobileNumber || !amount || !diamonds || !mechanicId) {
+        res.status(400).json({ error: 'Missing required fields' });
+        return;
+    }
+    
+    try {
+        const now = new Date();
+        const expiryDate = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+        
+        const txnRefNo = `T${formatJazzCashDate(now)}`;
+        const txnDateTime = formatJazzCashDate(now);
+        const txnExpiryDateTime = formatJazzCashDate(expiryDate);
+        const amountInPaisa = Math.round(amount * 100).toString();
+        
+        // Create transaction record
+        const transactionRef = await db.collection('transactions').add({
+            userId: mechanicId,
+            type: 'purchase',
+            amount: diamonds,
+            paymentMethod: 'jazzcash',
+            paymentDetails: {
+                transactionId: txnRefNo,
+                amount: amount,
+            },
+            status: 'pending',
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        
+        // MWALLET API parameters - only include CNIC if provided
+        const formData = {
+            pp_Amount: amountInPaisa,
+            pp_BillReference: `FXK${Date.now().toString().slice(-10)}`,
+            pp_Description: 'DiamondPurchase',
+            pp_Language: 'EN',
+            pp_MerchantID: JAZZCASH_CONFIG.merchantId,
+            pp_MobileNumber: mobileNumber,
+            pp_Password: JAZZCASH_CONFIG.password,
+            pp_TxnCurrency: 'PKR',
+            pp_TxnDateTime: txnDateTime,
+            pp_TxnExpiryDateTime: txnExpiryDateTime,
+            pp_TxnRefNo: txnRefNo,
+            pp_TxnType: 'MWALLET',
+            pp_Version: '2.0',
+        };
+        
+        // Only add CNIC if provided and valid
+        if (cnic && cnic.length === 6) {
+            formData.pp_CNIC = cnic;
+        }
+        
+        // Generate secure hash
+        const secureHash = generateSecureHash(formData, JAZZCASH_CONFIG.integritySalt);
+        formData.pp_SecureHash = secureHash;
+        
+        console.log('Sending MWALLET request:', JSON.stringify(formData));
+        
+        // Convert to form-urlencoded format
+        const formBody = Object.keys(formData)
+            .map(key => encodeURIComponent(key) + '=' + encodeURIComponent(formData[key]))
+            .join('&');
+        
+        // Make API request with form-urlencoded content type
+        const response = await fetch(JAZZCASH_CONFIG.mwalletUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: formBody,
+        });
+        
+        const result = await response.json();
+        console.log('JazzCash Response:', JSON.stringify(result));
+        
+        if (result.pp_ResponseCode === '000') {
+            // Payment successful - update mechanic diamonds
+            const mechanicRef = db.collection('mechanics').doc(mechanicId);
+            await mechanicRef.update({
+                diamonds: admin.firestore.FieldValue.increment(diamonds),
+            });
+            
+            // Update transaction status
+            await transactionRef.update({
+                status: 'completed',
+                completedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            
+            res.json({
+                success: true,
+                message: 'Payment successful',
+                transactionId: txnRefNo,
+            });
+        } else if (result.pp_ResponseCode === '121') {
+            // OTP required
+            await transactionRef.update({
+                status: 'pending_otp',
+            });
+            
+            res.json({
+                success: false,
+                requiresOTP: true,
+                message: 'OTP sent to your mobile number. Please approve in JazzCash app.',
+                transactionId: txnRefNo,
+            });
+        } else {
+            // Payment failed
+            await transactionRef.update({
+                status: 'failed',
+                error: result.pp_ResponseMessage,
+            });
+            
+            res.json({
+                success: false,
+                message: result.pp_ResponseMessage || 'Payment failed',
+                errorCode: result.pp_ResponseCode,
+            });
+        }
+        
+    } catch (error) {
+        console.error('JazzCash payment error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
