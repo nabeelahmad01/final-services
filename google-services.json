@@ -15,48 +15,19 @@
       },
       "oauth_client": [
         {
-          "client_id": "46898577180-jqq7ijbihgh2uqp5tpt4rbtme0b4trev.apps.googleusercontent.com",
+          "client_id": "46898577180-0b72gcad3s9g53vgpci17p9ja2a2fqaf.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.fixkar.app",
-            "certificate_hash": "3571aa2977d8b99074d531652ea7c9959eb12ae8"
+            "certificate_hash": "c276dabb4cf4c116e45b360436ec8fc89d6d90eb"
           }
         },
         {
-          "client_id": "46898577180-huc4s3jurg1okqq19ro5pvald7b8gilh.apps.googleusercontent.com",
-          "client_type": 3
-        }
-      ],
-      "api_key": [
-        {
-          "current_key": "AIzaSyDrzx7tUpHgCLhnTQYUOqo-HVjO_RaRoSM"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": [
-            {
-              "client_id": "46898577180-huc4s3jurg1okqq19ro5pvald7b8gilh.apps.googleusercontent.com",
-              "client_type": 3
-            }
-          ]
-        }
-      }
-    },
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:46898577180:android:11fa0bad8aacc0d0b104d9",
-        "android_client_info": {
-          "package_name": "com.fixkarapp"
-        }
-      },
-      "oauth_client": [
-        {
-          "client_id": "46898577180-3ra9u5h4ccgm0frucslmrkc4vuh93f3e.apps.googleusercontent.com",
+          "client_id": "46898577180-c5mvie3hut4ul9hd0917es678l8jio96.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.fixkarapp",
-            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+            "package_name": "com.fixkar.app",
+            "certificate_hash": "546f7f1ba5de699466a24d809758d93ea4e2513d"
           }
         },
         {
