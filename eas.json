@@ -22,6 +22,7 @@
         "production": {
             "developmentClient": false,
             "channel": "production",
+            "credentialsSource": "local",
             "env": {
                 "EXPO_PUBLIC_OTP_DEV_MODE": "false",
                 "EXPO_NO_DEV_CLIENT": "true"
