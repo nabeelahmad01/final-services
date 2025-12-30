@@ -5,7 +5,6 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, Card } from '@/components';
 import { COLORS, SIZES, FONTS } from '@/constants/theme';
-import { processPayment } from '@/services/payment/paymentService';
 import { useAuthStore } from '@/stores/authStore';
 import { useModal, showErrorModal, showSuccessModal } from '@/utils/modalService';
 
@@ -31,30 +30,12 @@ export default function Payment() {
             return;
         }
 
-        setProcessing(true);
-        try {
-            const result = await processPayment(
-                user?.id || 'anonymous',
-                amount,
-                selectedMethod,
-                phoneNumber
-            );
-
-            if (result.success) {
-                showSuccessModal(
-                    showModal,
-                    'Payment Successful',
-                    'Your payment has been processed successfully',
-                    () => router.push('/(customer)/home')
-                );
-            } else {
-                showErrorModal(showModal, 'Payment Failed', result.error || 'Unknown error');
-            }
-        } catch (error: any) {
-            showErrorModal(showModal, 'Payment Failed', error.message);
-        } finally {
-            setProcessing(false);
-        }
+        // Payment integration coming soon
+        showErrorModal(
+            showModal,
+            'Coming Soon',
+            'Customer payment integration will be available soon!'
+        );
     };
 
     return (

@@ -1,222 +1,239 @@
-import { Linking } from 'react-native';
+/**
+ * JazzCash Hosted Checkout Service
+ * 
+ * Uses WebView to redirect user to JazzCash's official payment page.
+ * This is the most reliable and officially supported method.
+ */
+
 import CryptoJS from 'crypto-js';
-import { createTransaction, updateMechanicDiamonds, updateTransactionStatus } from '../firebase/firestore';
+import {
+  createTransaction,
+  updateMechanicDiamonds,
+  updateTransactionStatus,
+} from '../firebase/firestore';
 
-interface JazzCashPaymentData {
-    amount: number; // PKR
-    mechanicId: string;
-    diamonds: number;
-    description?: string;
-}
-
+// Configuration
 interface JazzCashConfig {
-    merchantId: string;
-    password: string;
-    integritySalt: string;
-    sandboxUrl: string;
-    returnUrl: string;
+  merchantId: string;
+  password: string;
+  integritySalt: string;
+  sandboxUrl: string;
+  returnUrl: string;
 }
 
-// Get JazzCash configuration from environment variables
-const getJazzCashConfig = (): JazzCashConfig => ({
-    merchantId: process.env.EXPO_PUBLIC_JAZZCASH_MERCHANT_ID || '',
-    password: process.env.EXPO_PUBLIC_JAZZCASH_PASSWORD || '',
-    integritySalt: process.env.EXPO_PUBLIC_JAZZCASH_INTEGRITY_SALT || '',
-    sandboxUrl: process.env.EXPO_PUBLIC_JAZZCASH_SANDBOX_URL || '',
-    returnUrl: process.env.EXPO_PUBLIC_JAZZCASH_RETURN_URL || '',
+// Payment data
+export interface JazzCashPaymentData {
+  amount: number;
+  mechanicId: string;
+  diamonds: number;
+  description?: string;
+}
+
+// Get configuration
+const getConfig = (): JazzCashConfig => ({
+  merchantId: process.env.EXPO_PUBLIC_JAZZCASH_MERCHANT_ID || '',
+  password: process.env.EXPO_PUBLIC_JAZZCASH_PASSWORD || '',
+  integritySalt: process.env.EXPO_PUBLIC_JAZZCASH_INTEGRITY_SALT || '',
+  sandboxUrl: 'https://sandbox.jazzcash.com.pk/CustomerPortal/transactionmanagement/merchantform/',
+  returnUrl: 'https://fixkar.app/payment-callback',
 });
 
-// Format date for JazzCash (YYYYMMDDHHmmss)
-const formatJazzCashDate = (date: Date): string => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    const seconds = String(date.getSeconds()).padStart(2, '0');
-    return `${year}${month}${day}${hours}${minutes}${seconds}`;
+// Format date (YYYYMMDDHHmmss)
+const formatDate = (date: Date): string => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  const h = String(date.getHours()).padStart(2, '0');
+  const min = String(date.getMinutes()).padStart(2, '0');
+  const s = String(date.getSeconds()).padStart(2, '0');
+  return `${y}${m}${d}${h}${min}${s}`;
 };
 
-// Generate transaction reference number
-const generateTxnRefNo = (): string => {
-    return `T${formatJazzCashDate(new Date())}`;
+// Generate transaction reference
+const generateTxnRef = (): string => `T${formatDate(new Date())}`;
+
+// Generate bill reference
+const generateBillRef = (): string => {
+  const ts = Date.now().toString().slice(-10);
+  const rand = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+  return `FXK${ts}${rand}`;
 };
 
-// Generate SHA256 hash for JazzCash
-// JazzCash docs: Salt is PREPENDED to the sorted values string, then SHA256 is computed
-const generateSecureHash = (params: Record<string, string>, salt: string): string => {
-    // Sort parameters alphabetically by key name
-    const sortedKeys = Object.keys(params).sort();
-    const hashValues: string[] = [];
-    
-    for (const key of sortedKeys) {
-        if (params[key] && params[key] !== '') {
-            hashValues.push(params[key]);
-        }
+/**
+ * Generate secure hash for JazzCash Hosted Checkout
+ * Uses HMAC-SHA256 with sorted values
+ */
+const generateSecureHash = (
+  params: Record<string, string>,
+  salt: string
+): string => {
+  // Sort keys, exclude pp_SecureHash
+  const sortedKeys = Object.keys(params)
+    .filter(k => k !== 'pp_SecureHash')
+    .sort();
+
+  // Get values only (non-empty)
+  const values: string[] = [];
+  for (const key of sortedKeys) {
+    const val = params[key];
+    if (val !== undefined && val !== null && val !== '') {
+      values.push(val);
     }
-    
-    // Prepend salt to the beginning, then join with &
-    const hashString = salt + '&' + hashValues.join('&');
-    
-    console.log('Hash String:', hashString);
-    
-    // Generate SHA256 hash (NOT HMAC - simple hash)
-    const hash = CryptoJS.SHA256(hashString);
-    
-    return hash.toString(CryptoJS.enc.Hex).toUpperCase();
+  }
+
+  // Format: salt&val1&val2&...
+  const hashString = salt + '&' + values.join('&');
+  
+  // HMAC-SHA256
+  const hash = CryptoJS.HmacSHA256(hashString, salt);
+  return hash.toString(CryptoJS.enc.Hex);
 };
 
-export const initiateJazzCashPayment = async (data: JazzCashPaymentData) => {
-    try {
-        const config = getJazzCashConfig();
-        
-        if (!config.merchantId || !config.password || !config.integritySalt) {
-            throw new Error('JazzCash credentials not configured');
-        }
+/**
+ * Generate HTML form for WebView
+ */
+export const generatePaymentForm = async (
+  data: JazzCashPaymentData
+): Promise<{ html: string; transactionId: string; billRef: string }> => {
+  const config = getConfig();
 
-        const now = new Date();
-        const expiryDate = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24 hours expiry
-        
-        const txnRefNo = generateTxnRefNo();
-        const txnDateTime = formatJazzCashDate(now);
-        const txnExpiryDateTime = formatJazzCashDate(expiryDate);
-        const amountInPaisa = (data.amount * 100).toString(); // Convert to paisa
+  if (!config.merchantId || !config.password || !config.integritySalt) {
+    throw new Error('JazzCash credentials not configured');
+  }
 
-        // Create transaction record in Firebase
-        const transactionId = await createTransaction({
-            userId: data.mechanicId,
-            type: 'purchase',
-            amount: data.diamonds,
-            paymentMethod: 'jazzcash',
-            paymentDetails: {
-                transactionId: txnRefNo,
-                amount: data.amount,
-            },
-            status: 'pending',
-        });
+  const now = new Date();
+  const expiry = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  
+  const txnRef = generateTxnRef();
+  const billRef = generateBillRef();
+  const txnDateTime = formatDate(now);
+  const txnExpiry = formatDate(expiry);
+  const amountPaisa = Math.round(data.amount * 100).toString();
 
-        // All parameters for hash calculation (including password)
-        const hashParams: Record<string, string> = {
-            pp_Amount: amountInPaisa,
-            pp_BillReference: `FIXKAR-${transactionId}`,
-            pp_Description: data.description || 'FixKar Diamond Purchase',
-            pp_Language: 'EN',
-            pp_MerchantID: config.merchantId,
-            pp_Password: config.password,
-            pp_ReturnURL: config.returnUrl,
-            pp_TxnCurrency: 'PKR',
-            pp_TxnDateTime: txnDateTime,
-            pp_TxnExpiryDateTime: txnExpiryDateTime,
-            pp_TxnRefNo: txnRefNo,
-            pp_Version: '1.1',
-            ppmpf_1: data.mechanicId,
-            ppmpf_2: data.diamonds.toString(),
-            ppmpf_3: transactionId,
-        };
+  // Create Firebase transaction
+  const firebaseTxnId = await createTransaction({
+    userId: data.mechanicId,
+    type: 'purchase',
+    amount: data.diamonds,
+    paymentMethod: 'jazzcash',
+    paymentDetails: {
+      transactionId: txnRef,
+      invoiceNumber: billRef,
+      amount: data.amount,
+    },
+    status: 'pending',
+  });
 
-        // Generate secure hash (includes password in calculation)
-        const secureHash = generateSecureHash(hashParams, config.integritySalt);
-        
-        // URL parameters (EXCLUDE password, include only non-empty values)
-        const urlParams: Record<string, string> = {
-            pp_Amount: amountInPaisa,
-            pp_BillReference: `FIXKAR-${transactionId}`,
-            pp_Description: data.description || 'FixKar Diamond Purchase',
-            pp_Language: 'EN',
-            pp_MerchantID: config.merchantId,
-            pp_Password: config.password, // JazzCash still needs password in POST
-            pp_ReturnURL: config.returnUrl,
-            pp_TxnCurrency: 'PKR',
-            pp_TxnDateTime: txnDateTime,
-            pp_TxnExpiryDateTime: txnExpiryDateTime,
-            pp_TxnRefNo: txnRefNo,
-            pp_Version: '1.1',
-            ppmpf_1: data.mechanicId,
-            ppmpf_2: data.diamonds.toString(),
-            ppmpf_3: transactionId,
-            pp_SecureHash: secureHash,
-        };
+  // Form parameters
+  const formParams: Record<string, string> = {
+    pp_Version: '1.1',
+    pp_TxnType: '',
+    pp_Language: 'EN',
+    pp_MerchantID: config.merchantId,
+    pp_SubMerchantID: '',
+    pp_Password: config.password,
+    pp_BankID: '',
+    pp_ProductID: '',
+    pp_TxnRefNo: txnRef,
+    pp_Amount: amountPaisa,
+    pp_TxnCurrency: 'PKR',
+    pp_TxnDateTime: txnDateTime,
+    pp_BillReference: billRef,
+    pp_Description: data.description || 'Diamond Purchase',
+    pp_TxnExpiryDateTime: txnExpiry,
+    pp_ReturnURL: config.returnUrl,
+    pp_SecureHash: '',
+    ppmpf_1: '',
+    ppmpf_2: '',
+    ppmpf_3: '',
+    ppmpf_4: '',
+    ppmpf_5: '',
+  };
 
-        const queryParams = new URLSearchParams(urlParams);
-        const paymentUrl = `${config.sandboxUrl}?${queryParams.toString()}`;
+  // Generate hash
+  formParams.pp_SecureHash = generateSecureHash(formParams, config.integritySalt);
 
-        console.log('JazzCash Payment URL:', paymentUrl);
-        console.log('Transaction Ref:', txnRefNo);
+  // Build HTML form
+  const formFields = Object.entries(formParams)
+    .map(([key, val]) => `<input type="hidden" name="${key}" value="${val}" />`)
+    .join('\n');
 
-        // Open payment URL in browser
-        const canOpen = await Linking.canOpenURL(paymentUrl);
-        if (canOpen) {
-            await Linking.openURL(paymentUrl);
-        } else {
-            throw new Error('Cannot open payment URL');
-        }
-
-        return {
-            transactionId,
-            txnRefNo,
-            paymentUrl,
-        };
-    } catch (error) {
-        console.error('JazzCash payment error:', error);
-        throw new Error('Failed to initiate JazzCash payment');
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Redirecting to JazzCash...</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      background: linear-gradient(135deg, #ED1C24 0%, #C41E3A 100%);
+      color: white;
     }
+    .container {
+      text-align: center;
+      padding: 40px;
+    }
+    .spinner {
+      width: 50px;
+      height: 50px;
+      border: 4px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 20px;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    h2 { margin: 0 0 10px; font-weight: 500; }
+    p { margin: 0; opacity: 0.8; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="spinner"></div>
+    <h2>Redirecting to JazzCash</h2>
+    <p>Please wait...</p>
+  </div>
+  <form id="paymentForm" method="POST" action="${config.sandboxUrl}">
+    ${formFields}
+  </form>
+  <script>
+    document.getElementById('paymentForm').submit();
+  </script>
+</body>
+</html>
+`;
+
+  return { html, transactionId: firebaseTxnId, billRef };
 };
 
-// Handle payment callback from JazzCash
-export const handleJazzCashCallback = async (responseParams: Record<string, string>) => {
-    try {
-        const {
-            pp_ResponseCode,
-            pp_ResponseMessage,
-            pp_TxnRefNo,
-            ppmpf_1: mechanicId,
-            ppmpf_2: diamondsStr,
-            ppmpf_3: firebaseTransactionId,
-        } = responseParams;
+/**
+ * Handle payment callback
+ */
+export const handlePaymentCallback = async (
+  params: Record<string, string>,
+  firebaseTxnId: string,
+  mechanicId: string,
+  diamonds: number
+): Promise<{ success: boolean; message: string }> => {
+  const responseCode = params.pp_ResponseCode;
+  const responseMessage = params.pp_ResponseMessage || 'Unknown';
 
-        const diamonds = parseInt(diamondsStr || '0', 10);
-
-        // Check if payment was successful
-        if (pp_ResponseCode === '000') {
-            // Payment successful
-            await updateMechanicDiamonds(mechanicId, diamonds, 'add');
-            await updateTransactionStatus(firebaseTransactionId, 'completed');
-            
-            return {
-                success: true,
-                message: 'Payment successful! Diamonds added to your wallet.',
-                diamonds,
-            };
-        } else {
-            // Payment failed
-            await updateTransactionStatus(firebaseTransactionId, 'failed');
-            
-            return {
-                success: false,
-                message: pp_ResponseMessage || 'Payment failed. Please try again.',
-            };
-        }
-    } catch (error) {
-        console.error('JazzCash callback error:', error);
-        throw new Error('Failed to process payment callback');
-    }
-};
-
-export const verifyJazzCashPayment = async (
-    transactionId: string,
-    mechanicId: string,
-    diamonds: number
-) => {
-    try {
-        // Update diamond balance
-        await updateMechanicDiamonds(mechanicId, diamonds, 'add');
-
-        // Update transaction status
-        await updateTransactionStatus(transactionId, 'completed');
-
-        return true;
-    } catch (error) {
-        console.error('JazzCash verification error:', error);
-        throw new Error('Failed to verify payment');
-    }
+  if (responseCode === '000') {
+    // Success
+    await updateMechanicDiamonds(mechanicId, diamonds, 'add');
+    await updateTransactionStatus(firebaseTxnId, 'completed');
+    return { success: true, message: 'Payment successful!' };
+  } else {
+    // Failed
+    await updateTransactionStatus(firebaseTxnId, 'failed');
+    return { success: false, message: responseMessage };
+  }
 };

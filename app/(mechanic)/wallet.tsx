@@ -13,16 +13,14 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { useAuthStore } from "@/stores/authStore";
 import { getMechanic, getTransactions } from "@/services/firebase/firestore";
-import { initiateJazzCashPayment } from "@/services/payments/jazzcashService";
-import { initiateEasypaisaPayment } from "@/services/payments/easypaisaService";
 import { COLORS, SIZES, DIAMOND_PACKAGES } from "@/constants/theme";
 import { Mechanic, Transaction } from "@/types";
 import {
   useModal,
   showErrorModal,
   showSuccessModal,
-  showConfirmModal,
 } from "@/utils/modalService";
+import JazzCashPaymentFlow from "@/components/mechanic/JazzCashPaymentFlow";
 
 export default function WalletScreen() {
   const router = useRouter();
@@ -32,10 +30,10 @@ export default function WalletScreen() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [selectedPackage, setSelectedPackage] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [showPaymentFlow, setShowPaymentFlow] = useState(false);
 
   useEffect(() => {
     if (!user) return;
-
     loadData();
   }, [user]);
 
@@ -55,48 +53,31 @@ export default function WalletScreen() {
       return;
     }
 
-    showConfirmModal(
+    if (paymentMethod === "jazzcash") {
+      // Open MWALLET payment flow modal
+      setShowPaymentFlow(true);
+    } else {
+      showErrorModal(
+        showModal,
+        "Coming Soon",
+        "EasyPaisa payment will be available soon!"
+      );
+    }
+  };
+
+  const handlePaymentSuccess = () => {
+    setShowPaymentFlow(false);
+    setSelectedPackage(null);
+    loadData(); // Reload wallet data
+    showSuccessModal(
       showModal,
-      `Purchase with ${
-        paymentMethod === "jazzcash" ? "JazzCash" : "EasyPaisa"
-      }`,
-      `You will be charged PKR ${selectedPackage.price} for ${selectedPackage.diamonds} diamonds`,
-      async () => {
-        setLoading(true);
-        try {
-          if (paymentMethod === "jazzcash") {
-            // Navigate to JazzCash WebView payment screen
-            router.push({
-              pathname: "/(mechanic)/jazzcash-payment",
-              params: {
-                amount: selectedPackage.price.toString(),
-                mechanicId: user.id,
-                diamonds: selectedPackage.diamonds.toString(),
-              },
-            });
-          } else {
-            const paymentData = {
-              amount: selectedPackage.price,
-              mechanicId: user.id,
-              diamonds: selectedPackage.diamonds,
-            };
-            await initiateEasypaisaPayment(paymentData);
-            showSuccessModal(
-              showModal,
-              "Success",
-              "Payment initiated. You will be redirected to the payment gateway."
-            );
-          }
-        } catch (error: any) {
-          showErrorModal(showModal, "Error", error.message);
-        } finally {
-          setLoading(false);
-        }
-      },
-      undefined,
-      "Continue",
-      "Cancel"
+      "Payment Complete",
+      "Your diamonds have been added to your wallet!"
     );
+  };
+
+  const handlePaymentClose = () => {
+    setShowPaymentFlow(false);
   };
 
   if (!mechanic) return null;
@@ -253,6 +234,18 @@ export default function WalletScreen() {
           )}
         </View>
       </ScrollView>
+
+      {/* JazzCash MWALLET Payment Flow Modal */}
+      {selectedPackage && user && (
+        <JazzCashPaymentFlow
+          visible={showPaymentFlow}
+          onClose={handlePaymentClose}
+          onSuccess={handlePaymentSuccess}
+          amount={selectedPackage.price}
+          diamonds={selectedPackage.diamonds}
+          mechanicId={user.id}
+        />
+      )}
     </SafeAreaView>
   );
 }

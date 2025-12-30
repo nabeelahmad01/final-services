@@ -150,10 +150,12 @@ export interface Transaction {
     userId: string;
     type: 'purchase' | 'deduction' | 'refund';
     amount: number; // diamonds
-    paymentMethod?: 'jazzcash' | 'easypaisa';
+    paymentMethod?: 'jazzcash' | 'easypaisa' | 'jazzcash_mwallet';
     paymentDetails?: {
         transactionId: string;
         amount: number; // PKR
+        invoiceNumber?: string;
+        mobileNumber?: string; // masked for privacy
     };
     relatedBookingId?: string;
     status: 'pending' | 'completed' | 'failed';
