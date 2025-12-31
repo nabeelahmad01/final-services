@@ -14,12 +14,7 @@ export default function CustomerLayout() {
                 tabBarActiveTintColor: COLORS.primary,
                 tabBarInactiveTintColor: COLORS.textSecondary,
                 tabBarStyle: {
-                    backgroundColor: COLORS.surface,
-                    borderTopWidth: 1,
-                    borderTopColor: COLORS.border,
-                    height: 60 + insets.bottom,
-                    paddingBottom: insets.bottom,
-                    paddingTop: 8,
+                    display: 'none', // Hide tab bar - use quick actions instead
                 },
                 tabBarLabelStyle: {
                     fontSize: 12,

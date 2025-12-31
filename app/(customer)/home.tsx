@@ -8,6 +8,7 @@ import {
   Platform,
   Dimensions,
   StatusBar,
+  Modal,
 } from "react-native";
 import {
   SafeAreaView,
@@ -23,10 +24,11 @@ import { useNotifications } from "@/stores/useNotifications";
 import {
   subscribeToActiveBooking,
   getNearbyMechanics,
+  getCustomerRecentBookings,
 } from "@/services/firebase/firestore";
 import { useModal, showInfoModal } from "@/utils/modalService";
 import { COLORS, SIZES, CATEGORIES } from "@/constants/theme";
-import { ServiceCategory, Mechanic } from "@/types";
+import { ServiceCategory, Mechanic, Booking } from "@/types";
 import { Card } from "@/components/ui/Card";
 import { Avatar } from "@/components/shared/Avatar";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
@@ -82,7 +84,8 @@ const CustomMechanicMarker = ({ category }: { category?: ServiceCategory }) => {
 };
 
 export default function CustomerHome() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isUrdu = i18n.language === 'ur';
   const COLORS = useThemeColor();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -103,6 +106,9 @@ export default function CustomerHome() {
   const [selectedCategory, setSelectedCategory] =
     useState<ServiceCategory | null>(null);
   const [loadingMechanics, setLoadingMechanics] = useState(false);
+  const [recentBookings, setRecentBookings] = useState<Booking[]>([]);
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
+  const [selectedLocationName, setSelectedLocationName] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -119,6 +125,13 @@ export default function CustomerHome() {
     );
 
     initializeLocation();
+
+    // Fetch recent bookings
+    const fetchRecentBookings = async () => {
+      const bookings = await getCustomerRecentBookings(user.id, 3);
+      setRecentBookings(bookings);
+    };
+    fetchRecentBookings();
 
     return () => unsubscribe();
   }, [user]);
@@ -190,9 +203,34 @@ export default function CustomerHome() {
   };
 
   const handleServiceRequest = (category: ServiceCategory) => {
+    // Include pre-selected location if available
+    const params: any = { category };
+    
+    if (selectedLocationName && userLocation) {
+      params.presetLat = userLocation.latitude.toString();
+      params.presetLng = userLocation.longitude.toString();
+      params.presetAddress = selectedLocationName;
+    }
+    
     router.push({
       pathname: "/(customer)/service-request",
-      params: { category },
+      params,
+    });
+  };
+
+  const handleEmergency = () => {
+    // Navigate to service request with emergency flag and pre-selected location
+    const params: any = { emergency: 'true' };
+    
+    if (selectedLocationName && userLocation) {
+      params.presetLat = userLocation.latitude.toString();
+      params.presetLng = userLocation.longitude.toString();
+      params.presetAddress = selectedLocationName;
+    }
+    
+    router.push({
+      pathname: "/(customer)/service-request",
+      params,
     });
   };
 
@@ -202,6 +240,25 @@ export default function CustomerHome() {
     return mechanic.categories && mechanic.categories.length > 0
       ? mechanic.categories[0]
       : undefined;
+  };
+
+  // Get greeting based on time and language
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (isUrdu) {
+      if (hour < 12) return 'السلام علیکم';
+      if (hour < 17) return 'السلام علیکم';
+      return 'السلام علیکم';
+    } else {
+      if (hour < 12) return 'Good Morning';
+      if (hour < 17) return 'Good Afternoon';
+      return 'Good Evening';
+    }
+  };
+
+  const getUserFirstName = () => {
+    if (!user?.name) return '';
+    return user.name.split(' ')[0];
   };
 
   const renderMap = () => {
@@ -234,7 +291,7 @@ export default function CustomerHome() {
           latitudeDelta: 0.015,
           longitudeDelta: 0.015,
         }}
-        showsUserLocation={false} // Hide system blue dot
+        showsUserLocation={false}
         showsMyLocationButton={false}
         showsCompass={false}
         toolbarEnabled={false}
@@ -285,37 +342,180 @@ export default function CustomerHome() {
       {/* Full Screen Map */}
       <View style={styles.mapContainer}>{renderMap()}</View>
 
-      {/* Standard Header (Reverted) */}
+      {/* Modern Header */}
       <View style={[styles.header, { paddingTop: insets.top }]}>
-        <View style={styles.headerContent}>
+        {/* Top Row - Greeting + Avatar */}
+        <View style={styles.headerTopRow}>
+          <View style={styles.greetingSection}>
+            <Text style={styles.greetingSmall}>
+              {getGreeting()} 👋
+            </Text>
+            <Text style={[styles.userName, isUrdu && styles.urduText]}>
+              {user?.name || 'User'}
+            </Text>
+          </View>
+          
           <TouchableOpacity
-            style={styles.menuButton}
+            style={styles.avatarButton}
             onPress={() => router.push("/(shared)/profile")}
           >
-            <Ionicons name="menu" size={28} color={COLORS.text} />
+            <Avatar name={user?.name || ''} uri={user?.profilePic} size={48} />
             {useNotifications.getState().unreadCount > 0 && (
-              <View style={styles.badge} />
+              <View style={styles.avatarBadge} />
             )}
           </TouchableOpacity>
-
-          <View style={styles.headerTitleContainer}>
-            <Text style={styles.headerTitle}>FixKar</Text>
-            {userLocation && (
-              <View style={styles.locationBadge}>
-                <Ionicons name="location" size={12} color={COLORS.primary} />
-                <Text style={styles.locationText}>Current Location</Text>
-              </View>
-            )}
-          </View>
-
-          <View style={{ width: 40 }} />
         </View>
+
+        {/* Location Row - Search bar style */}
+        <TouchableOpacity 
+          style={styles.locationBar} 
+          activeOpacity={0.8}
+          onPress={() => setShowLocationPicker(true)}
+        >
+          <View style={styles.locationIconBox}>
+            <Ionicons name="location" size={18} color={COLORS.white} />
+          </View>
+          <View style={styles.locationTextContainer}>
+            <Text style={styles.locationLabel}>
+              {isUrdu ? 'آپ کا مقام' : 'Your location'}
+            </Text>
+            <Text style={styles.locationAddress} numberOfLines={1}>
+              {selectedLocationName || (isUrdu ? 'موجودہ مقام' : 'Current Location')}
+            </Text>
+          </View>
+          <View style={styles.dropdownIcon}>
+            <Ionicons name="chevron-down" size={18} color={COLORS.textSecondary} />
+          </View>
+        </TouchableOpacity>
+      </View>
+
+      {/* Location Picker Modal */}
+      <Modal
+        visible={showLocationPicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowLocationPicker(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowLocationPicker(false)}
+        >
+          <View style={styles.locationPickerModal}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>
+              {isUrdu ? 'مقام منتخب کریں' : 'Select Location'}
+            </Text>
+
+            {/* Use Current Location Option */}
+            <TouchableOpacity 
+              style={styles.locationOption}
+              onPress={() => {
+                initializeLocation();
+                setSelectedLocationName(isUrdu ? 'موجودہ GPS مقام' : 'Current GPS Location');
+                setShowLocationPicker(false);
+              }}
+            >
+              <View style={[styles.locationOptionIcon, { backgroundColor: COLORS.primary + '15' }]}>
+                <Ionicons name="navigate" size={20} color={COLORS.primary} />
+              </View>
+              <View style={styles.locationOptionText}>
+                <Text style={styles.locationOptionTitle}>
+                  {isUrdu ? 'موجودہ GPS مقام' : 'Use Current GPS'}
+                </Text>
+                <Text style={styles.locationOptionSubtitle}>
+                  {isUrdu ? 'آپ کا موجودہ مقام' : 'Your current location'}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+
+            {/* Recent Locations */}
+            {recentBookings.length > 0 && (
+              <>
+                <Text style={[styles.locationSectionTitle, isUrdu && styles.urduText]}>
+                  {isUrdu ? 'حالیہ مقامات' : 'Recent Locations'}
+                </Text>
+                {recentBookings.slice(0, 4).map((booking, index) => {
+                  const categoryData = CATEGORIES.find(c => c.id === booking.category);
+                  const locationName = isUrdu 
+                    ? (categoryData as any)?.urdu + ' - ' + booking.completedAt?.toLocaleDateString()
+                    : categoryData?.name + ' - ' + booking.completedAt?.toLocaleDateString();
+                  
+                  return (
+                    <TouchableOpacity 
+                      key={booking.id}
+                      style={styles.locationOption}
+                      onPress={() => {
+                        if (booking.customerLocation) {
+                          setUserLocation({
+                            latitude: booking.customerLocation.latitude,
+                            longitude: booking.customerLocation.longitude,
+                          });
+                          // Use actual address from booking, not category name
+                          setSelectedLocationName(booking.customerLocation.address || (isUrdu ? (categoryData as any)?.urdu : categoryData?.name));
+                        }
+                        setShowLocationPicker(false);
+                      }}
+                    >
+                      <View style={[styles.locationOptionIcon, { backgroundColor: (categoryData?.color || COLORS.primary) + '15' }]}>
+                        <Ionicons name="time" size={20} color={categoryData?.color || COLORS.primary} />
+                      </View>
+                      <View style={styles.locationOptionText}>
+                        <Text style={styles.locationOptionTitle} numberOfLines={1}>
+                          {booking.customerLocation?.address || (isUrdu ? (categoryData as any)?.urdu : categoryData?.name)}
+                        </Text>
+                        <Text style={styles.locationOptionSubtitle}>
+                          {(isUrdu ? (categoryData as any)?.urdu : categoryData?.name)} • {booking.completedAt?.toLocaleDateString()}
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={20} color={COLORS.textSecondary} />
+                    </TouchableOpacity>
+                  );
+                })}
+              </>
+            )}
+
+            {/* Close Button */}
+            <TouchableOpacity 
+              style={styles.closeModalButton}
+              onPress={() => setShowLocationPicker(false)}
+            >
+              <Text style={styles.closeModalText}>
+                {isUrdu ? 'بند کریں' : 'Close'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Quick Actions - Floating Pills */}
+      <View style={styles.quickActionsContainer}>
+        <TouchableOpacity
+          style={styles.emergencyButton}
+          onPress={handleEmergency}
+        >
+          <Ionicons name="flash" size={18} color={COLORS.white} />
+          <Text style={styles.emergencyText}>
+            {isUrdu ? 'فوری' : 'Urgent'}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.quickActionButton}
+          onPress={() => router.push("/(customer)/bookings")}
+        >
+          <Ionicons name="time" size={18} color={COLORS.text} />
+          <Text style={styles.quickActionText}>
+            {isUrdu ? 'بکنگز' : 'My Bookings'}
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {/* Location Refresh Button */}
       <TouchableOpacity
         onPress={initializeLocation}
-        style={[styles.refreshButton, { bottom: 220 }]}
+        style={[styles.refreshButton, { bottom: 260 }]}
       >
         <Ionicons name="locate" size={24} color={COLORS.primary} />
       </TouchableOpacity>
@@ -331,7 +531,7 @@ export default function CustomerHome() {
             <View style={styles.activeBookingContent}>
               <View style={styles.pulsatingDot} />
               <Text style={styles.activeBookingText}>
-                {t("home.mechanicOnWay")}
+                {isUrdu ? 'آپ کا مستری آ رہا ہے' : t("home.mechanicOnWay")}
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={COLORS.white} />
@@ -340,7 +540,9 @@ export default function CustomerHome() {
 
         {/* Services List */}
         <View style={styles.servicesContainer}>
-          <Text style={styles.servicesTitle}>{t("home.selectService")}</Text>
+          <Text style={[styles.servicesTitle, isUrdu && styles.urduText]}>
+            {isUrdu ? 'سروس منتخب کریں' : t("home.selectService")}
+          </Text>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -365,17 +567,59 @@ export default function CustomerHome() {
                 >
                   <Ionicons
                     name={category.icon as any}
-                    size={28}
+                    size={32}
                     color={category.color}
                   />
                 </View>
-                <Text style={styles.serviceName} numberOfLines={1}>
-                  {category.name}
+                <Text style={[styles.serviceName, isUrdu && styles.urduText]} numberOfLines={2}>
+                  {isUrdu ? (category as any).urdu : category.name}
                 </Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
         </View>
+
+        {/* Recent Locations */}
+        {recentBookings.length > 0 && (
+          <View style={styles.recentLocationsContainer}>
+            <Text style={[styles.servicesTitle, isUrdu && styles.urduText]}>
+              {isUrdu ? 'حالیہ مقامات' : 'Recent Locations'}
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.recentLocationsScroll}
+            >
+              {recentBookings.map((booking) => {
+                const categoryData = CATEGORIES.find(c => c.id === booking.category);
+                return (
+                  <TouchableOpacity
+                    key={booking.id}
+                    style={styles.recentLocationCard}
+                    onPress={() => handleServiceRequest(booking.category as ServiceCategory)}
+                  >
+                    <View style={[styles.recentLocationIcon, { backgroundColor: (categoryData?.color || COLORS.primary) + '20' }]}>
+                      <Ionicons
+                        name="location"
+                        size={20}
+                        color={categoryData?.color || COLORS.primary}
+                      />
+                    </View>
+                    <View style={styles.recentLocationInfo}>
+                      <Text style={styles.recentLocationCategory} numberOfLines={1}>
+                        {isUrdu ? (categoryData as any)?.urdu : categoryData?.name}
+                      </Text>
+                      <Text style={styles.recentLocationDate}>
+                        {booking.completedAt?.toLocaleDateString()}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color={COLORS.textSecondary} />
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -425,16 +669,85 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 20,
-    paddingBottom: 16,
+    paddingBottom: 8,
     paddingTop: 10,
+  },
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 12,
+  },
+  greetingSection: {
+    flex: 1,
+  },
+  greetingSmall: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
+  userName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.text,
+    marginTop: 2,
   },
   headerTitleContainer: {
     alignItems: "center",
+  },
+  headerLeft: {
+    alignItems: 'flex-start',
+  },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: "bold",
     color: COLORS.primary,
+  },
+  locationBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.background,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 14,
+    gap: 12,
+  },
+  locationIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  locationTextContainer: {
+    flex: 1,
+  },
+  locationLabel: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+  },
+  locationAddress: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.text,
+    marginTop: 1,
+  },
+  dropdownIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: COLORS.border,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   locationBadge: {
     flexDirection: "row",
@@ -466,6 +779,81 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: COLORS.danger,
   },
+  avatarButton: {
+    position: 'relative',
+  },
+  avatarBadge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: COLORS.danger,
+    borderWidth: 2,
+    borderColor: COLORS.surface,
+  },
+  greetingContainer: {
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    alignItems: 'center',
+  },
+  greetingText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  urduText: {
+    textAlign: 'right',
+    writingDirection: 'rtl',
+  },
+  quickActionsContainer: {
+    flexDirection: 'row',
+    position: 'absolute',
+    top: 180,
+    left: 16,
+    right: 16,
+    gap: 10,
+    zIndex: 10,
+  },
+  emergencyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.danger,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 25,
+    gap: 6,
+    shadowColor: COLORS.danger,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  emergencyText: {
+    color: COLORS.white,
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  quickActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 25,
+    gap: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  quickActionText: {
+    color: COLORS.text,
+    fontWeight: '600',
+    fontSize: 13,
+  },
   refreshButton: {
     position: "absolute",
     right: 20,
@@ -491,7 +879,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingTop: 20,
-    paddingBottom: 30, // Extra padding for safe area
+    paddingBottom: 30,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.1,
@@ -539,7 +927,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   serviceCard: {
-    width: 100,
+    width: 110,
     alignItems: "center",
     gap: 8,
   },
@@ -547,17 +935,18 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   serviceIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
+    width: 72,
+    height: 72,
+    borderRadius: 24,
     justifyContent: "center",
     alignItems: "center",
   },
   serviceName: {
-    fontSize: SIZES.xs,
+    fontSize: 13,
     fontWeight: "500",
     color: COLORS.text,
     textAlign: "center",
+    lineHeight: 18,
   },
   // Markers
   userMarkerContainer: {
@@ -636,4 +1025,122 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 5,
   },
+  // Recent Locations
+  recentLocationsContainer: {
+    marginTop: 16,
+    paddingBottom: 10,
+  },
+  recentLocationsScroll: {
+    paddingHorizontal: 20,
+    gap: 12,
+  },
+  recentLocationCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.background,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 14,
+    gap: 10,
+    minWidth: 180,
+  },
+  recentLocationIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  recentLocationInfo: {
+    flex: 1,
+  },
+  recentLocationCategory: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  recentLocationDate: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  // Location Picker Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  locationPickerModal: {
+    backgroundColor: COLORS.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingBottom: 30,
+    maxHeight: '70%',
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: COLORS.border,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginTop: 12,
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.text,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  locationOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    gap: 12,
+  },
+  locationOptionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  locationOptionText: {
+    flex: 1,
+  },
+  locationOptionTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  locationOptionSubtitle: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  locationSectionTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  closeModalButton: {
+    backgroundColor: COLORS.background,
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginTop: 20,
+    alignItems: 'center',
+  },
+  closeModalText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
 });
+

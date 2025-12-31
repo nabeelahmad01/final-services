@@ -94,48 +94,56 @@ export const CATEGORIES = [
     {
         id: 'bike_mechanic',
         name: 'Bike Mechanic',
+        urdu: 'موٹر سائیکل مستری',
         icon: 'bicycle',
         color: '#FF6F00'
     },
     {
         id: 'car_mechanic',
         name: 'Car Mechanic',
+        urdu: 'گاڑی کا مستری',
         icon: 'car',
         color: '#1976D2'
     },
     {
         id: 'plumber',
         name: 'Plumber',
+        urdu: 'پلمبر',
         icon: 'water',
         color: '#0097A7'
     },
     {
         id: 'electrician',
         name: 'Electrician',
+        urdu: 'الیکٹریشن',
         icon: 'flash',
         color: '#FFA000'
     },
     {
         id: 'ac_fridge',
         name: 'AC/Fridge Repair',
+        urdu: 'اے سی / فریج مرمت',
         icon: 'snow',
         color: '#00ACC1'
     },
     {
         id: 'mobile_repair',
         name: 'Mobile Repair',
+        urdu: 'موبائل مرمت',
         icon: 'phone-portrait',
         color: '#5E35B1'
     },
     {
         id: 'carpenter',
         name: 'Carpenter',
+        urdu: 'بڑھئی',
         icon: 'hammer',
         color: '#6D4C41'
     },
     {
         id: 'general_mart',
         name: 'General Mart',
+        urdu: 'جنرل مارٹ',
         icon: 'storefront',
         color: '#8E24AA'
     },

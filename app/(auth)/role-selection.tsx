@@ -1,97 +1,160 @@
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
+import { useTranslation } from 'react-i18next';
+import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SIZES } from '@/constants/theme';
 
-export default function RoleSelection() {
+export default function WelcomeScreen() {
     const router = useRouter();
+    const { t, i18n } = useTranslation();
+    const isUrdu = i18n.language === 'ur';
 
-    const handleRoleSelect = (role: 'customer' | 'mechanic') => {
-        // Go to phone login - role is selected in complete-profile
+    const toggleLanguage = () => {
+        i18n.changeLanguage(isUrdu ? 'en' : 'ur');
+    };
+
+    const handleGetStarted = () => {
         router.push('/(auth)/phone-login');
     };
 
     return (
         <SafeAreaView style={styles.container}>
+            <LinearGradient
+                colors={[COLORS.background, COLORS.surface]}
+                style={StyleSheet.absoluteFillObject}
+            />
+            
             <View style={styles.content}>
+                {/* Language Toggle */}
+                <Animated.View 
+                    entering={FadeInDown.delay(100)}
+                    style={styles.languageToggle}
+                >
+                    <TouchableOpacity
+                        onPress={toggleLanguage}
+                        style={[styles.langButton, !isUrdu && styles.langButtonActive]}
+                    >
+                        <Text style={[styles.langText, !isUrdu && styles.langTextActive]}>EN 🇺🇸</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        onPress={toggleLanguage}
+                        style={[styles.langButton, isUrdu && styles.langButtonActive]}
+                    >
+                        <Text style={[styles.langText, isUrdu && styles.langTextActive]}>اردو 🇵🇰</Text>
+                    </TouchableOpacity>
+                </Animated.View>
+
+                {/* Logo & Brand */}
                 <Animated.View
                     entering={FadeInDown.delay(200)}
-                    style={styles.header}
+                    style={styles.logoSection}
                 >
-                    <Text style={styles.title}>Welcome to</Text>
-                    <Text style={styles.brandName}>Service Marketplace</Text>
-                    <Text style={styles.subtitle}>
-                        Your trusted platform for connecting with skilled mechanics
+                    <View style={styles.logoContainer}>
+                        <LinearGradient
+                            colors={[COLORS.primary, COLORS.primaryDark || '#1a6b5c']}
+                            style={styles.logoGradient}
+                        >
+                            <Ionicons name="construct" size={48} color={COLORS.white} />
+                        </LinearGradient>
+                    </View>
+                    <Text style={styles.brandName}>FixKar</Text>
+                    <Text style={[styles.tagline, isUrdu && styles.urduText]}>
+                        {isUrdu ? 'آپ کی سروس، آپ کے دروازے پر' : 'Your Service, At Your Doorstep'}
                     </Text>
                 </Animated.View>
 
-                <View style={styles.rolesContainer}>
-                    <Animated.View
-                        entering={FadeInDown.delay(400)}
-                        style={styles.roleCardWrapper}
-                    >
-                        <TouchableOpacity
-                            style={[styles.roleCard, styles.customerCard]}
-                            onPress={() => handleRoleSelect('customer')}
-                            activeOpacity={0.9}
-                        >
-                            <View style={[styles.iconContainer, styles.customerIconBg]}>
-                                <Ionicons name="person" size={48} color={COLORS.white} />
+                {/* Features */}
+                <Animated.View 
+                    entering={FadeInUp.delay(400)}
+                    style={styles.featuresContainer}
+                >
+                    <View style={styles.featureRow}>
+                        <View style={styles.featureItem}>
+                            <View style={[styles.featureIcon, { backgroundColor: COLORS.primary + '20' }]}>
+                                <Ionicons name="shield-checkmark" size={24} color={COLORS.primary} />
                             </View>
-                            <Text style={styles.roleTitle}>I Need a Service</Text>
-                            <Text style={styles.roleDescription}>
-                                Find and hire skilled mechanics for your needs
+                            <Text style={[styles.featureText, isUrdu && styles.urduText]}>
+                                {isUrdu ? 'تصدیق شدہ مستری' : 'Verified Mechanics'}
                             </Text>
-                            <View style={styles.arrow}>
-                                <Ionicons name="arrow-forward" size={24} color={COLORS.primary} />
+                        </View>
+                        <View style={styles.featureItem}>
+                            <View style={[styles.featureIcon, { backgroundColor: COLORS.secondary + '20' }]}>
+                                <Ionicons name="location" size={24} color={COLORS.secondary} />
                             </View>
-                        </TouchableOpacity>
-                    </Animated.View>
-
-                    <Animated.View
-                        entering={FadeInDown.delay(600)}
-                        style={styles.roleCardWrapper}
-                    >
-                        <TouchableOpacity
-                            style={[styles.roleCard, styles.mechanicCard]}
-                            onPress={() => handleRoleSelect('mechanic')}
-                            activeOpacity={0.9}
-                        >
-                            <View style={[styles.iconContainer, styles.mechanicIconBg]}>
-                                <Ionicons name="construct" size={48} color={COLORS.white} />
-                            </View>
-                            <Text style={styles.roleTitle}>I Provide Services</Text>
-                            <Text style={styles.roleDescription}>
-                                Start earning by offering your skills to customers
+                            <Text style={[styles.featureText, isUrdu && styles.urduText]}>
+                                {isUrdu ? 'لائیو ٹریکنگ' : 'Live Tracking'}
                             </Text>
-                            <View style={styles.arrow}>
-                                <Ionicons name="arrow-forward" size={24} color={COLORS.secondary} />
+                        </View>
+                    </View>
+                    <View style={styles.featureRow}>
+                        <View style={styles.featureItem}>
+                            <View style={[styles.featureIcon, { backgroundColor: COLORS.success + '20' }]}>
+                                <Ionicons name="cash" size={24} color={COLORS.success} />
                             </View>
-                        </TouchableOpacity>
-                    </Animated.View>
-                </View>
+                            <Text style={[styles.featureText, isUrdu && styles.urduText]}>
+                                {isUrdu ? 'آسان ادائیگی' : 'Easy Payment'}
+                            </Text>
+                        </View>
+                        <View style={styles.featureItem}>
+                            <View style={[styles.featureIcon, { backgroundColor: COLORS.warning + '20' }]}>
+                                <Ionicons name="star" size={24} color={COLORS.warning} />
+                            </View>
+                            <Text style={[styles.featureText, isUrdu && styles.urduText]}>
+                                {isUrdu ? 'ریٹنگ سسٹم' : 'Rating System'}
+                            </Text>
+                        </View>
+                    </View>
+                </Animated.View>
 
-                <Animated.View entering={FadeInDown.delay(800)}>
+                {/* Get Started Button */}
+                <Animated.View 
+                    entering={FadeInUp.delay(600)}
+                    style={styles.buttonContainer}
+                >
+                    <TouchableOpacity
+                        style={styles.getStartedButton}
+                        onPress={handleGetStarted}
+                        activeOpacity={0.9}
+                    >
+                        <LinearGradient
+                            colors={[COLORS.primary, COLORS.primaryDark || '#1a6b5c']}
+                            style={styles.buttonGradient}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                        >
+                            <Text style={styles.getStartedText}>
+                                {isUrdu ? 'شروع کریں' : 'Get Started'}
+                            </Text>
+                            <Ionicons 
+                                name={isUrdu ? "arrow-back" : "arrow-forward"} 
+                                size={24} 
+                                color={COLORS.white} 
+                            />
+                        </LinearGradient>
+                    </TouchableOpacity>
+
                     <TouchableOpacity
                         onPress={() => router.push('/(auth)/login')}
                         style={styles.loginLink}
                     >
-                        <Text style={styles.loginText}>
-                            Already have an account? <Text style={styles.loginTextBold}>Login</Text>
+                        <Text style={[styles.loginText, isUrdu && styles.urduText]}>
+                            {isUrdu ? 'پہلے سے اکاؤنٹ ہے؟ ' : 'Already have an account? '}
+                            <Text style={styles.loginTextBold}>{t('auth.login')}</Text>
                         </Text>
                     </TouchableOpacity>
-
-                    {/* Admin Access Button */}
-                    <TouchableOpacity
-                        onPress={() => router.push('/(admin)')}
-                        style={styles.adminLink}
-                    >
-                        <Ionicons name="shield-checkmark-outline" size={16} color={COLORS.textSecondary} />
-                        <Text style={styles.adminText}>Admin Access</Text>
-                    </TouchableOpacity>
                 </Animated.View>
+
+                {/* Admin Access - Hidden at bottom */}
+                <TouchableOpacity
+                    onPress={() => router.push('/(admin)')}
+                    style={styles.adminLink}
+                >
+                    <Ionicons name="shield-checkmark-outline" size={14} color={COLORS.textSecondary} />
+                    <Text style={styles.adminText}>Admin</Text>
+                </TouchableOpacity>
             </View>
         </SafeAreaView>
     );
@@ -107,80 +170,118 @@ const styles = StyleSheet.create({
         padding: SIZES.padding * 1.5,
         justifyContent: 'space-between',
     },
-    header: {
-        alignItems: 'center',
-        marginTop: 40,
-    },
-    title: {
-        fontSize: 24,
-        color: COLORS.textSecondary,
-    },
-    brandName: {
-        fontSize: 32,
-        fontWeight: 'bold',
-        color: COLORS.primary,
-        marginVertical: 8,
-    },
-    subtitle: {
-        fontSize: SIZES.base,
-        color: COLORS.textSecondary,
-        textAlign: 'center',
-        marginTop: 8,
-        paddingHorizontal: 20,
-    },
-    rolesContainer: {
-        gap: 20,
-    },
-    roleCardWrapper: {
-        width: '100%',
-    },
-    roleCard: {
+    languageToggle: {
+        flexDirection: 'row',
+        alignSelf: 'center',
         backgroundColor: COLORS.surface,
+        borderRadius: 25,
+        padding: 4,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+    },
+    langButton: {
+        paddingHorizontal: 20,
+        paddingVertical: 10,
         borderRadius: 20,
-        padding: 24,
-        borderWidth: 2,
-        borderColor: 'transparent',
     },
-    customerCard: {
-        borderColor: COLORS.primary + '30',
-    },
-    mechanicCard: {
-        borderColor: COLORS.secondary + '30',
-    },
-    iconContainer: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 16,
-    },
-    customerIconBg: {
+    langButtonActive: {
         backgroundColor: COLORS.primary,
     },
-    mechanicIconBg: {
-        backgroundColor: COLORS.secondary,
+    langText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: COLORS.textSecondary,
     },
-    roleTitle: {
-        fontSize: 22,
+    langTextActive: {
+        color: COLORS.white,
+    },
+    logoSection: {
+        alignItems: 'center',
+        marginTop: 20,
+    },
+    logoContainer: {
+        marginBottom: 16,
+    },
+    logoGradient: {
+        width: 100,
+        height: 100,
+        borderRadius: 50,
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: COLORS.primary,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.4,
+        shadowRadius: 16,
+        elevation: 10,
+    },
+    brandName: {
+        fontSize: 42,
         fontWeight: 'bold',
-        color: COLORS.text,
+        color: COLORS.primary,
         marginBottom: 8,
     },
-    roleDescription: {
-        fontSize: SIZES.base,
+    tagline: {
+        fontSize: 18,
         color: COLORS.textSecondary,
-        lineHeight: 22,
+        textAlign: 'center',
     },
-    arrow: {
-        position: 'absolute',
-        right: 24,
-        top: '50%',
-        transform: [{ translateY: -12 }],
+    urduText: {
+        writingDirection: 'rtl',
+        textAlign: 'center',
+    },
+    featuresContainer: {
+        gap: 16,
+    },
+    featureRow: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        gap: 20,
+    },
+    featureItem: {
+        alignItems: 'center',
+        width: 140,
+    },
+    featureIcon: {
+        width: 56,
+        height: 56,
+        borderRadius: 28,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    featureText: {
+        fontSize: 14,
+        color: COLORS.text,
+        textAlign: 'center',
+        fontWeight: '500',
+    },
+    buttonContainer: {
+        gap: 16,
+    },
+    getStartedButton: {
+        borderRadius: 16,
+        overflow: 'hidden',
+        shadowColor: COLORS.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 6,
+    },
+    buttonGradient: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 18,
+        gap: 10,
+    },
+    getStartedText: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: COLORS.white,
     },
     loginLink: {
         alignItems: 'center',
-        padding: 16,
+        padding: 8,
     },
     loginText: {
         fontSize: SIZES.base,
@@ -194,12 +295,12 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 6,
-        padding: 12,
-        marginTop: 8,
+        gap: 4,
+        padding: 8,
+        opacity: 0.5,
     },
     adminText: {
-        fontSize: SIZES.sm,
+        fontSize: 12,
         color: COLORS.textSecondary,
     },
 });

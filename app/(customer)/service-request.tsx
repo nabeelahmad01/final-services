@@ -38,6 +38,12 @@ export default function ServiceRequest() {
     const router = useRouter();
     const params = useLocalSearchParams();
     const category = (params.category as ServiceCategory) || 'car_mechanic';
+    
+    // Pre-selected location from home screen
+    const presetLat = params.presetLat ? parseFloat(params.presetLat as string) : null;
+    const presetLng = params.presetLng ? parseFloat(params.presetLng as string) : null;
+    const presetAddress = params.presetAddress as string | null;
+    
     const { user } = useAuthStore();
     const { showModal } = useModal();
     const mapRef = useRef<any>(null);
@@ -45,12 +51,12 @@ export default function ServiceRequest() {
 
     const [description, setDescription] = useState('');
     const [location, setLocation] = useState({
-        latitude: 33.6844, // Islamabad default
-        longitude: 73.0479,
+        latitude: presetLat || 33.6844, // Use preset or Islamabad default
+        longitude: presetLng || 73.0479,
     });
-    const [address, setAddress] = useState('');
+    const [address, setAddress] = useState(presetAddress || '');
     const [loading, setLoading] = useState(false);
-    const [loadingLocation, setLoadingLocation] = useState(true);
+    const [loadingLocation, setLoadingLocation] = useState(!presetLat); // Don't show loading if preset
     const [listViewDisplayed, setListViewDisplayed] = useState<'auto' | boolean>('auto');
 
     // Scheduling States
@@ -62,7 +68,19 @@ export default function ServiceRequest() {
     const categoryInfo = CATEGORIES.find(c => c.id === category);
 
     useEffect(() => {
-        getCurrentLocation();
+        // If preset location provided, just animate to it, otherwise get current location
+        if (presetLat && presetLng) {
+            setLoadingLocation(false);
+            // Animate to preset location and update search field
+            setTimeout(() => {
+                animateToLocation({ latitude: presetLat, longitude: presetLng });
+                if (googlePlacesRef.current && presetAddress) {
+                    googlePlacesRef.current.setAddressText(presetAddress);
+                }
+            }, 500);
+        } else {
+            getCurrentLocation();
+        }
     }, []);
 
     const getCurrentLocation = async () => {

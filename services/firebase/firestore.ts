@@ -336,6 +336,33 @@ export const getCompletedBookings = async (mechanicId: string, limitCount: numbe
     });
 };
 
+// Get recent bookings for a customer (for showing past service locations)
+export const getCustomerRecentBookings = async (customerId: string, limitCount: number = 5): Promise<Booking[]> => {
+    try {
+        const q = query(
+            collection(firestore, 'bookings'),
+            where('customerId', '==', customerId),
+            where('status', '==', 'completed'),
+            orderBy('completedAt', 'desc'),
+            limit(limitCount)
+        );
+
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                ...data,
+                startedAt: data.startedAt?.toDate() || new Date(),
+                completedAt: data.completedAt?.toDate() || new Date(),
+            } as Booking;
+        });
+    } catch (error) {
+        console.error('Error fetching customer recent bookings:', error);
+        return [];
+    }
+};
+
 // Get scheduled bookings for a mechanic (upcoming jobs)
 export const getMechanicScheduledBookings = async (mechanicId: string): Promise<Booking[]> => {
     const q = query(
