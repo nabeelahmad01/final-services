@@ -7,9 +7,13 @@ import {
     TouchableOpacity,
     RefreshControl,
     Linking,
+    Image,
+    Modal,
+    TextInput,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { Audio } from 'expo-av';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useAuthStore } from '@/stores/authStore';
@@ -48,6 +52,14 @@ export default function MechanicRequests() {
     const [mechanicProposals, setMechanicProposals] = useState<Proposal[]>([]);
     const [refreshing, setRefreshing] = useState(false);
     const [submitting, setSubmitting] = useState<string | null>(null);
+    const [playingVoice, setPlayingVoice] = useState<string | null>(null);
+    const [sound, setSound] = useState<Audio.Sound | null>(null);
+
+    // Proposal Modal States
+    const [showProposalModal, setShowProposalModal] = useState(false);
+    const [selectedRequest, setSelectedRequest] = useState<ServiceRequest | null>(null);
+    const [proposalPrice, setProposalPrice] = useState('');
+    const [proposalMessage, setProposalMessage] = useState('');
 
     useEffect(() => {
         if (!user) return;
@@ -92,56 +104,61 @@ export default function MechanicRequests() {
         };
     }, [user]);
 
-    const handleSubmitProposal = async (request: ServiceRequest) => {
-        if (!user) return;
+    // Open proposal modal with request details
+    const openProposalModal = (request: ServiceRequest) => {
+        setSelectedRequest(request);
+        setProposalPrice('');
+        setProposalMessage('');
+        setShowProposalModal(true);
+    };
 
-        showConfirmModal(
-            showModal,
-            'Submit Proposal',
-            'Cost: 1 Diamond\n\nEnter your proposal details:',
-            async () => {
-                setSubmitting(request.id);
-                try {
-                    // Deduct diamond
-                    await updateMechanicDiamonds(user.id, 1, 'subtract');
+    // Submit the actual proposal
+    const submitProposal = async () => {
+        if (!user || !selectedRequest) return;
+        
+        if (!proposalPrice || parseInt(proposalPrice) <= 0) {
+            showErrorModal(showModal, 'Error', 'Please enter a valid price');
+            return;
+        }
 
-                    // Get mechanic details
-                    const mechanicData = await getMechanic(user.id);
-                    if (!mechanicData) throw new Error('Mechanic data not found');
+        setSubmitting(selectedRequest.id);
+        try {
+            // Deduct diamond
+            await updateMechanicDiamonds(user.id, 1, 'subtract');
 
-                    // Create proposal object
-                    const proposalData: any = {
-                        requestId: request.id,
-                        customerId: request.customerId,
-                        mechanicId: user.id,
-                        mechanicName: user.name,
-                        mechanicRating: mechanicData.rating,
-                        mechanicTotalRatings: mechanicData.totalRatings,
-                        price: 100, // TODO: Let mechanic input
-                        estimatedTime: '1-2 hours', // TODO: Let mechanic input
-                        message: 'I can help you with this!',
-                        distance: 2.5, // TODO: Calculate actual distance
-                        status: 'pending',
-                    };
+            // Get mechanic details
+            const mechanicData = await getMechanic(user.id);
+            if (!mechanicData) throw new Error('Mechanic data not found');
 
-                    // Only add mechanicPhoto if it exists
-                    if (user.profilePic) {
-                        proposalData.mechanicPhoto = user.profilePic;
-                    }
+            // Create proposal object
+            const proposalData: any = {
+                requestId: selectedRequest.id,
+                customerId: selectedRequest.customerId,
+                mechanicId: user.id,
+                mechanicName: user.name,
+                mechanicRating: mechanicData.rating,
+                mechanicTotalRatings: mechanicData.totalRatings,
+                price: parseInt(proposalPrice),
+                estimatedTime: '1-2 hours',
+                message: proposalMessage || 'I can help you with this!',
+                distance: 2.5,
+                status: 'pending',
+            };
 
-                    await createProposal(proposalData);
+            if (user.profilePic) {
+                proposalData.mechanicPhoto = user.profilePic;
+            }
 
-                    showSuccessModal(showModal, 'Success', 'Proposal submitted!');
-                } catch (error: any) {
-                    showErrorModal(showModal, 'Error', error.message);
-                } finally {
-                    setSubmitting(null);
-                }
-            },
-            undefined,
-            'Submit',
-            'Cancel'
-        );
+            await createProposal(proposalData);
+
+            setShowProposalModal(false);
+            setSelectedRequest(null);
+            showSuccessModal(showModal, 'Success', 'Proposal submitted!');
+        } catch (error: any) {
+            showErrorModal(showModal, 'Error', error.message);
+        } finally {
+            setSubmitting(null);
+        }
     };
 
     const handleNavigateToCustomer = (booking: Booking) => {
@@ -188,6 +205,39 @@ export default function MechanicRequests() {
     const onRefresh = async () => {
         setRefreshing(true);
         setTimeout(() => setRefreshing(false), 1000);
+    };
+
+    // Play voice message from service request
+    const playVoiceMessage = async (voiceUrl: string, requestId: string) => {
+        try {
+            if (playingVoice === requestId && sound) {
+                await sound.stopAsync();
+                await sound.unloadAsync();
+                setPlayingVoice(null);
+                setSound(null);
+                return;
+            }
+
+            if (sound) {
+                await sound.unloadAsync();
+            }
+
+            const { sound: playbackSound } = await Audio.Sound.createAsync(
+                { uri: voiceUrl }
+            );
+            setSound(playbackSound);
+            setPlayingVoice(requestId);
+
+            playbackSound.setOnPlaybackStatusUpdate((status) => {
+                if (status.isLoaded && status.didJustFinish) {
+                    setPlayingVoice(null);
+                }
+            });
+
+            await playbackSound.playAsync();
+        } catch (error) {
+            console.error('Error playing voice:', error);
+        }
     };
 
     // Filter out requests where mechanic has already submitted a proposal
@@ -256,6 +306,36 @@ export default function MechanicRequests() {
 
                                 <Text style={styles.description}>{request.description}</Text>
 
+                                {/* Voice Message */}
+                                {request.voiceMessage && (
+                                    <TouchableOpacity
+                                        style={styles.voiceMessageBtn}
+                                        onPress={() => playVoiceMessage(request.voiceMessage!, request.id)}
+                                    >
+                                        <Ionicons
+                                            name={playingVoice === request.id ? 'pause-circle' : 'play-circle'}
+                                            size={28}
+                                            color={COLORS.primary}
+                                        />
+                                        <Text style={styles.voiceMessageText}>
+                                            {playingVoice === request.id ? 'Playing...' : 'Play Voice Message'}
+                                        </Text>
+                                    </TouchableOpacity>
+                                )}
+
+                                {/* Images */}
+                                {request.images && request.images.length > 0 && (
+                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imagesScroll}>
+                                        {request.images.map((imgUri, idx) => (
+                                            <Image
+                                                key={idx}
+                                                source={{ uri: imgUri }}
+                                                style={styles.requestImage}
+                                            />
+                                        ))}
+                                    </ScrollView>
+                                )}
+
                                 <View style={styles.costBadge}>
                                     <Ionicons name="diamond" size={16} color={COLORS.primary} />
                                     <Text style={styles.costText}>1 Diamond to send proposal</Text>
@@ -263,7 +343,7 @@ export default function MechanicRequests() {
 
                                 <Button
                                     title="Submit Proposal"
-                                    onPress={() => handleSubmitProposal(request)}
+                                    onPress={() => openProposalModal(request)}
                                     loading={submitting === request.id}
                                     disabled={submitting !== null}
                                     size="small"
@@ -430,6 +510,116 @@ export default function MechanicRequests() {
             >
                 {activeTab === 'requests' ? renderRequestsTab() : renderScheduledTab()}
             </ScrollView>
+
+            {/* Proposal Modal */}
+            <Modal
+                visible={showProposalModal}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setShowProposalModal(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.proposalModal}>
+                        <View style={styles.modalHandle} />
+                        
+                        {/* Header */}
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Submit Proposal</Text>
+                            <TouchableOpacity onPress={() => setShowProposalModal(false)}>
+                                <Ionicons name="close" size={24} color={COLORS.text} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <ScrollView showsVerticalScrollIndicator={false}>
+                            {selectedRequest && (
+                                <>
+                                    {/* Customer Description */}
+                                    <View style={styles.modalSection}>
+                                        <Text style={styles.sectionLabel}>Customer's Request:</Text>
+                                        <Text style={styles.requestDescription}>{selectedRequest.description}</Text>
+                                    </View>
+
+                                    {/* Voice Message */}
+                                    {selectedRequest.voiceMessage && (
+                                        <View style={styles.modalSection}>
+                                            <Text style={styles.sectionLabel}>🎤 Voice Message:</Text>
+                                            <TouchableOpacity
+                                                style={styles.voicePlayBtn}
+                                                onPress={() => playVoiceMessage(selectedRequest.voiceMessage!, selectedRequest.id)}
+                                            >
+                                                <Ionicons
+                                                    name={playingVoice === selectedRequest.id ? 'pause-circle' : 'play-circle'}
+                                                    size={36}
+                                                    color={COLORS.primary}
+                                                />
+                                                <Text style={styles.voicePlayText}>
+                                                    {playingVoice === selectedRequest.id ? 'Playing...' : 'Tap to Play'}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                    )}
+
+                                    {/* Images */}
+                                    {selectedRequest.images && selectedRequest.images.length > 0 && (
+                                        <View style={styles.modalSection}>
+                                            <Text style={styles.sectionLabel}>📷 Photos ({selectedRequest.images.length}):</Text>
+                                            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                                                {selectedRequest.images.map((imgUri, idx) => (
+                                                    <Image
+                                                        key={idx}
+                                                        source={{ uri: imgUri }}
+                                                        style={styles.modalImage}
+                                                    />
+                                                ))}
+                                            </ScrollView>
+                                        </View>
+                                    )}
+
+                                    {/* Price Input */}
+                                    <View style={styles.modalSection}>
+                                        <Text style={styles.sectionLabel}>Your Price (PKR):</Text>
+                                        <TextInput
+                                            style={styles.priceInput}
+                                            placeholder="Enter price..."
+                                            keyboardType="numeric"
+                                            value={proposalPrice}
+                                            onChangeText={setProposalPrice}
+                                            placeholderTextColor={COLORS.textSecondary}
+                                        />
+                                    </View>
+
+                                    {/* Message Input */}
+                                    <View style={styles.modalSection}>
+                                        <Text style={styles.sectionLabel}>Message (Optional):</Text>
+                                        <TextInput
+                                            style={styles.messageInput}
+                                            placeholder="Add a message to customer..."
+                                            multiline
+                                            numberOfLines={3}
+                                            value={proposalMessage}
+                                            onChangeText={setProposalMessage}
+                                            placeholderTextColor={COLORS.textSecondary}
+                                        />
+                                    </View>
+
+                                    {/* Diamond Cost */}
+                                    <View style={styles.diamondCost}>
+                                        <Ionicons name="diamond" size={20} color={COLORS.primary} />
+                                        <Text style={styles.diamondCostText}>Cost: 1 Diamond</Text>
+                                    </View>
+
+                                    {/* Submit Button */}
+                                    <Button
+                                        title="Submit Proposal"
+                                        onPress={submitProposal}
+                                        loading={submitting === selectedRequest.id}
+                                    />
+                                </>
+                            )}
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -698,5 +888,134 @@ const styles = StyleSheet.create({
         fontSize: SIZES.base,
         fontWeight: '600',
         color: COLORS.white,
+    },
+    // Voice and Image display styles
+    voiceMessageBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: COLORS.primary + '10',
+        paddingVertical: 10,
+        paddingHorizontal: 14,
+        borderRadius: 10,
+        gap: 8,
+        marginBottom: 12,
+    },
+    voiceMessageText: {
+        fontSize: SIZES.sm,
+        fontWeight: '600',
+        color: COLORS.primary,
+    },
+    imagesScroll: {
+        marginBottom: 12,
+    },
+    requestImage: {
+        width: 70,
+        height: 70,
+        borderRadius: 8,
+        marginRight: 8,
+    },
+    // Proposal Modal Styles
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'flex-end',
+    },
+    proposalModal: {
+        backgroundColor: COLORS.surface,
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        padding: 20,
+        maxHeight: '90%',
+    },
+    modalHandle: {
+        width: 40,
+        height: 4,
+        backgroundColor: COLORS.border,
+        borderRadius: 2,
+        alignSelf: 'center',
+        marginBottom: 16,
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    modalTitle: {
+        fontSize: SIZES.lg,
+        fontWeight: 'bold',
+        color: COLORS.text,
+    },
+    modalSection: {
+        marginBottom: 20,
+    },
+    sectionLabel: {
+        fontSize: SIZES.sm,
+        fontWeight: '600',
+        color: COLORS.textSecondary,
+        marginBottom: 8,
+    },
+    requestDescription: {
+        fontSize: SIZES.base,
+        color: COLORS.text,
+        lineHeight: 22,
+        backgroundColor: COLORS.background,
+        padding: 12,
+        borderRadius: 10,
+    },
+    voicePlayBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: COLORS.primary + '15',
+        padding: 16,
+        borderRadius: 12,
+        gap: 12,
+    },
+    voicePlayText: {
+        fontSize: SIZES.base,
+        fontWeight: '600',
+        color: COLORS.primary,
+    },
+    modalImage: {
+        width: 100,
+        height: 100,
+        borderRadius: 10,
+        marginRight: 10,
+    },
+    priceInput: {
+        backgroundColor: COLORS.background,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+        borderRadius: 12,
+        padding: 14,
+        fontSize: SIZES.lg,
+        fontWeight: 'bold',
+        color: COLORS.text,
+    },
+    messageInput: {
+        backgroundColor: COLORS.background,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+        borderRadius: 12,
+        padding: 14,
+        fontSize: SIZES.base,
+        color: COLORS.text,
+        minHeight: 80,
+        textAlignVertical: 'top',
+    },
+    diamondCost: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: COLORS.primary + '10',
+        padding: 12,
+        borderRadius: 10,
+        gap: 8,
+        marginBottom: 16,
+    },
+    diamondCostText: {
+        fontSize: SIZES.base,
+        fontWeight: '600',
+        color: COLORS.primary,
     },
 });

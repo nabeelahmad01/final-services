@@ -68,6 +68,7 @@ export interface ServiceRequest {
     category: ServiceCategory;
     description: string;
     images?: string[];
+    voiceMessage?: string; // URL to voice recording in Firebase Storage
     location: {
         latitude: number;
         longitude: number;

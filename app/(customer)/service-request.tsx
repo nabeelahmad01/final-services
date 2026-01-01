@@ -10,16 +10,20 @@ import {
     ActivityIndicator,
     TextInput,
     Keyboard,
+    Image,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
+import * as ImagePicker from 'expo-image-picker';
+import { Audio } from 'expo-av';
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useAuthStore } from '@/stores/authStore';
 import { createServiceRequest, getNearbyMechanics } from '@/services/firebase/firestore';
+import { uploadVoiceMessage, uploadServiceRequestImage } from '@/services/firebase/storage';
 import { notifyNewServiceRequest } from '@/services/firebase/notifications';
 import { COLORS, SIZES, CATEGORIES } from '@/constants/theme';
 import { ServiceCategory } from '@/types';
@@ -64,6 +68,18 @@ export default function ServiceRequest() {
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [selectedTime, setSelectedTime] = useState<string>('');
     const [showDatePicker, setShowDatePicker] = useState(false);
+
+    // Voice Recording States
+    const [recording, setRecording] = useState<Audio.Recording | null>(null);
+    const [recordingUri, setRecordingUri] = useState<string | null>(null);
+    const [isRecording, setIsRecording] = useState(false);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [sound, setSound] = useState<Audio.Sound | null>(null);
+    const [recordingDuration, setRecordingDuration] = useState(0);
+    const intervalRef = React.useRef<NodeJS.Timeout | null>(null);
+
+    // Image States
+    const [selectedImages, setSelectedImages] = useState<string[]>([]);
 
     const categoryInfo = CATEGORIES.find(c => c.id === category);
 
@@ -206,6 +222,137 @@ export default function ServiceRequest() {
         }
     };
 
+    // Voice Recording Functions
+    const startRecording = async () => {
+        try {
+            await Audio.requestPermissionsAsync();
+            await Audio.setAudioModeAsync({
+                allowsRecordingIOS: true,
+                playsInSilentModeIOS: true,
+            });
+
+            const { recording } = await Audio.Recording.createAsync(
+                Audio.RecordingOptionsPresets.HIGH_QUALITY
+            );
+            setRecording(recording);
+            setIsRecording(true);
+            setRecordingDuration(0);
+
+            // Update duration every second - store in ref for cleanup
+            intervalRef.current = setInterval(() => {
+                setRecordingDuration(prev => {
+                    if (prev >= 59) {
+                        // Stop at 60 seconds
+                        if (intervalRef.current) {
+                            clearInterval(intervalRef.current);
+                            intervalRef.current = null;
+                        }
+                        return 60;
+                    }
+                    return prev + 1;
+                });
+            }, 1000);
+        } catch (err) {
+            console.error('Failed to start recording', err);
+        }
+    };
+
+    const stopRecording = async () => {
+        // Clear interval first
+        if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;
+        }
+
+        if (!recording) return;
+
+        setIsRecording(false);
+        try {
+            await recording.stopAndUnloadAsync();
+            await Audio.setAudioModeAsync({
+                allowsRecordingIOS: false,
+            });
+            const uri = recording.getURI();
+            setRecordingUri(uri);
+        } catch (err) {
+            console.error('Error stopping recording:', err);
+        }
+        setRecording(null);
+    };
+
+    const playRecording = async () => {
+        if (!recordingUri) return;
+
+        if (sound) {
+            await sound.unloadAsync();
+        }
+
+        const { sound: playbackSound } = await Audio.Sound.createAsync(
+            { uri: recordingUri }
+        );
+        setSound(playbackSound);
+        setIsPlaying(true);
+
+        playbackSound.setOnPlaybackStatusUpdate((status) => {
+            if (status.isLoaded && status.didJustFinish) {
+                setIsPlaying(false);
+            }
+        });
+
+        await playbackSound.playAsync();
+    };
+
+    const stopPlayback = async () => {
+        if (sound) {
+            await sound.stopAsync();
+            setIsPlaying(false);
+        }
+    };
+
+    const deleteRecording = () => {
+        setRecordingUri(null);
+        setRecordingDuration(0);
+    };
+
+    // Image Picker Function
+    const pickImages = async () => {
+        if (selectedImages.length >= 3) {
+            showErrorModal(showModal, 'Limit Reached', 'Maximum 3 images allowed');
+            return;
+        }
+
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsMultipleSelection: true,
+            selectionLimit: 3 - selectedImages.length,
+            quality: 0.7,
+        });
+
+        if (!result.canceled) {
+            const newImages = result.assets.map(asset => asset.uri);
+            setSelectedImages(prev => [...prev, ...newImages].slice(0, 3));
+        }
+    };
+
+    const takePhoto = async () => {
+        if (selectedImages.length >= 3) {
+            showErrorModal(showModal, 'Limit Reached', 'Maximum 3 images allowed');
+            return;
+        }
+
+        const result = await ImagePicker.launchCameraAsync({
+            quality: 0.7,
+        });
+
+        if (!result.canceled) {
+            setSelectedImages(prev => [...prev, result.assets[0].uri].slice(0, 3));
+        }
+    };
+
+    const removeImage = (index: number) => {
+        setSelectedImages(prev => prev.filter((_, i) => i !== index));
+    };
+
     const handleSubmit = async () => {
         if (!description || !address) {
             showErrorModal(
@@ -236,6 +383,43 @@ export default function ServiceRequest() {
 
         setLoading(true);
         try {
+            // Upload voice message if exists (with graceful fallback)
+            let voiceMessageUrl: string | undefined;
+            if (recordingUri) {
+                try {
+                    voiceMessageUrl = await uploadVoiceMessage(user.id, recordingUri);
+                } catch (uploadError: any) {
+                    console.log('⚠️ Voice upload failed:', uploadError.message);
+                    // Show warning but continue - don't block the request
+                    showModal({
+                        title: 'Warning',
+                        message: 'Voice message could not be uploaded. Your request will be sent without it.',
+                        type: 'warning',
+                        buttons: [{ text: 'OK', style: 'default', onPress: () => {} }],
+                    });
+                }
+            }
+
+            // Upload images if any (with graceful fallback)
+            let imageUrls: string[] = [];
+            if (selectedImages.length > 0) {
+                try {
+                    const uploadPromises = selectedImages.map((uri, index) =>
+                        uploadServiceRequestImage(user.id, uri, index)
+                    );
+                    imageUrls = await Promise.all(uploadPromises);
+                } catch (uploadError: any) {
+                    console.log('⚠️ Image upload failed:', uploadError.message);
+                    // Show warning but continue
+                    showModal({
+                        title: 'Warning',
+                        message: 'Photos could not be uploaded. Your request will be sent without them.',
+                        type: 'warning',
+                        buttons: [{ text: 'OK', style: 'default', onPress: () => {} }],
+                    });
+                }
+            }
+
             const requestId = await createServiceRequest({
                 customerId: user.id,
                 customerName: user.name,
@@ -248,9 +432,11 @@ export default function ServiceRequest() {
                 category,
                 description,
                 status: 'pending',
-                urgency: isScheduled ? 'low' : 'medium', // Lower urgency for scheduled
-                customerPhoto: user.profilePic || null, // Use null instead of undefined
+                urgency: isScheduled ? 'low' : 'medium',
+                customerPhoto: user.profilePic || null,
                 isScheduled: isScheduled || false,
+                ...(voiceMessageUrl ? { voiceMessage: voiceMessageUrl } : {}),
+                ...(imageUrls.length > 0 ? { images: imageUrls } : {}),
                 ...(isScheduled && selectedDate ? { scheduledDate: selectedDate } : {}),
                 ...(isScheduled && selectedTime ? { scheduledTime: selectedTime } : {}),
             });
@@ -614,6 +800,82 @@ export default function ServiceRequest() {
                             />
                         </View>
 
+                        {/* Voice Recording Section */}
+                        <View style={styles.mediaSection}>
+                            <Text style={styles.mediaSectionTitle}>
+                                🎤 Voice Message (Optional)
+                            </Text>
+                            
+                            {!recordingUri ? (
+                                <TouchableOpacity
+                                    style={[styles.recordButton, isRecording && styles.recordingActive]}
+                                    onPress={isRecording ? stopRecording : startRecording}
+                                >
+                                    <Ionicons
+                                        name={isRecording ? 'stop' : 'mic'}
+                                        size={24}
+                                        color={isRecording ? COLORS.white : COLORS.primary}
+                                    />
+                                    <Text style={[styles.recordButtonText, isRecording && styles.recordingText]}>
+                                        {isRecording ? `Recording... ${recordingDuration}s` : 'Tap to Record'}
+                                    </Text>
+                                </TouchableOpacity>
+                            ) : (
+                                <View style={styles.recordingPreview}>
+                                    <TouchableOpacity
+                                        style={styles.playButton}
+                                        onPress={isPlaying ? stopPlayback : playRecording}
+                                    >
+                                        <Ionicons
+                                            name={isPlaying ? 'pause' : 'play'}
+                                            size={20}
+                                            color={COLORS.white}
+                                        />
+                                    </TouchableOpacity>
+                                    <Text style={styles.durationText}>
+                                        Voice recorded ({recordingDuration}s)
+                                    </Text>
+                                    <TouchableOpacity onPress={deleteRecording}>
+                                        <Ionicons name="trash-outline" size={20} color={COLORS.danger} />
+                                    </TouchableOpacity>
+                                </View>
+                            )}
+                        </View>
+
+                        {/* Image Picker Section */}
+                        <View style={styles.mediaSection}>
+                            <Text style={styles.mediaSectionTitle}>
+                                📷 Photos (Optional, max 3)
+                            </Text>
+                            
+                            <View style={styles.imagePickerButtons}>
+                                <TouchableOpacity style={styles.imagePickerButton} onPress={takePhoto}>
+                                    <Ionicons name="camera" size={22} color={COLORS.primary} />
+                                    <Text style={styles.imagePickerText}>Camera</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={styles.imagePickerButton} onPress={pickImages}>
+                                    <Ionicons name="images" size={22} color={COLORS.primary} />
+                                    <Text style={styles.imagePickerText}>Gallery</Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            {selectedImages.length > 0 && (
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imagePreviewScroll}>
+                                    {selectedImages.map((uri, index) => (
+                                        <View key={index} style={styles.imagePreviewContainer}>
+                                            <Image source={{ uri }} style={styles.imagePreview} />
+                                            <TouchableOpacity
+                                                style={styles.removeImageButton}
+                                                onPress={() => removeImage(index)}
+                                            >
+                                                <Ionicons name="close-circle" size={24} color={COLORS.danger} />
+                                            </TouchableOpacity>
+                                        </View>
+                                    ))}
+                                </ScrollView>
+                            )}
+                        </View>
+
                         <View style={styles.infoCard}>
                             <Ionicons name="information-circle" size={24} color={COLORS.primary} />
                             <Text style={styles.infoText}>
@@ -909,5 +1171,100 @@ const styles = StyleSheet.create({
     },
     submitButton: {
         marginTop: 8,
+    },
+    // Voice Recording Styles
+    mediaSection: {
+        backgroundColor: COLORS.surface,
+        borderRadius: 12,
+        padding: 16,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+    },
+    mediaSectionTitle: {
+        fontSize: SIZES.sm,
+        fontWeight: '600',
+        color: COLORS.text,
+        marginBottom: 12,
+    },
+    recordButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: COLORS.primary + '15',
+        paddingVertical: 16,
+        borderRadius: 12,
+        gap: 10,
+    },
+    recordingActive: {
+        backgroundColor: COLORS.danger,
+    },
+    recordButtonText: {
+        fontSize: SIZES.base,
+        fontWeight: '600',
+        color: COLORS.primary,
+    },
+    recordingText: {
+        color: COLORS.white,
+    },
+    recordingPreview: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: COLORS.background,
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        borderRadius: 12,
+        gap: 12,
+    },
+    playButton: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: COLORS.primary,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    durationText: {
+        flex: 1,
+        fontSize: SIZES.sm,
+        color: COLORS.text,
+    },
+    // Image Picker Styles
+    imagePickerButtons: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    imagePickerButton: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: COLORS.primary + '15',
+        paddingVertical: 14,
+        borderRadius: 12,
+        gap: 8,
+    },
+    imagePickerText: {
+        fontSize: SIZES.sm,
+        fontWeight: '600',
+        color: COLORS.primary,
+    },
+    imagePreviewScroll: {
+        marginTop: 12,
+    },
+    imagePreviewContainer: {
+        position: 'relative',
+        marginRight: 10,
+    },
+    imagePreview: {
+        width: 80,
+        height: 80,
+        borderRadius: 10,
+    },
+    removeImageButton: {
+        position: 'absolute',
+        top: -8,
+        right: -8,
+        backgroundColor: COLORS.white,
+        borderRadius: 12,
     },
 });

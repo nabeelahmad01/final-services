@@ -1,71 +1,70 @@
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { storage } from './config';
+import { storage as webStorage } from './config';
+
+// Try to use native Firebase storage if available
+let nativeStorage: any = null;
+let useNativeStorage = false;
+
+try {
+    nativeStorage = require('@react-native-firebase/storage').default;
+    useNativeStorage = true;
+    console.log('✅ Native Firebase Storage loaded');
+} catch (e) {
+    console.log('⚠️ Native Firebase Storage not available, using web SDK');
+    useNativeStorage = false;
+}
 
 /**
  * Uploads an image to Firebase Storage and returns the download URL.
- * @param uri The local URI of the image to upload.
- * @param path The path in Firebase Storage where the image should be stored.
- * @returns The download URL of the uploaded image.
+ * Uses native Firebase in dev builds, web SDK in Expo Go
  */
 export const uploadImage = async (uri: string, path: string): Promise<string> => {
     try {
         console.log('Starting upload for:', path);
-        console.log('URI:', uri);
+        console.log('Using native storage:', useNativeStorage);
 
-        // Fetch the image as a blob
-        const response = await fetch(uri);
+        if (useNativeStorage && nativeStorage) {
+            // Native Firebase Storage (development build)
+            const reference = nativeStorage().ref(path);
+            const task = reference.putFile(uri);
 
-        if (!response.ok) {
-            throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+            task.on('state_changed', (taskSnapshot: any) => {
+                const progress = (taskSnapshot.bytesTransferred / taskSnapshot.totalBytes) * 100;
+                console.log('Upload progress:', progress.toFixed(2) + '%');
+            });
+
+            await task;
+            const downloadURL = await reference.getDownloadURL();
+            console.log('Download URL obtained:', downloadURL);
+            return downloadURL;
+        } else {
+            // Web SDK (Expo Go fallback)
+            console.log('Using web SDK for upload...');
+            const response = await fetch(uri);
+            const blob = await response.blob();
+            
+            const storageRef = ref(webStorage, path);
+            const uploadTask = uploadBytesResumable(storageRef, blob);
+
+            await new Promise<void>((resolve, reject) => {
+                uploadTask.on(
+                    'state_changed',
+                    (snapshot) => {
+                        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                        console.log('Upload progress:', progress.toFixed(2) + '%');
+                    },
+                    (error) => reject(error),
+                    () => resolve()
+                );
+            });
+
+            const downloadURL = await getDownloadURL(storageRef);
+            console.log('Download URL obtained:', downloadURL);
+            return downloadURL;
         }
-
-        const blob = await response.blob();
-        console.log('Blob created, size:', blob.size, 'type:', blob.type);
-
-        if (blob.size === 0) {
-            throw new Error('Image file is empty');
-        }
-
-        // Create storage reference
-        const storageRef = ref(storage, path);
-        console.log('Storage ref created');
-
-        // Upload the blob
-        const uploadTask = uploadBytesResumable(storageRef, blob);
-
-        // Wait for upload to complete with progress tracking
-        await new Promise<void>((resolve, reject) => {
-            uploadTask.on(
-                'state_changed',
-                (snapshot) => {
-                    const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                    console.log('Upload progress:', progress.toFixed(2) + '%');
-                },
-                (error) => {
-                    console.error('Upload error:', error);
-                    reject(error);
-                },
-                () => {
-                    console.log('Upload complete');
-                    resolve();
-                }
-            );
-        });
-
-        // Get download URL
-        const downloadURL = await getDownloadURL(storageRef);
-        console.log('Download URL obtained:', downloadURL);
-
-        return downloadURL;
     } catch (error: any) {
-        console.error('Upload error details:', {
-            message: error.message,
-            code: error.code,
-            serverResponse: error.serverResponse,
-            customData: error.customData
-        });
-
-        throw new Error(`Failed to upload image: ${error.code || error.message}`);
+        console.error('Upload error:', error.message, error.code);
+        throw new Error(`Failed to upload: ${error.code || error.message}`);
     }
 };
 
@@ -95,5 +94,32 @@ export const uploadJobPhoto = async (
     index: number
 ): Promise<string> => {
     const path = `bookings/${bookingId}/${photoType}/${index}_${Date.now()}.jpg`;
+    return uploadImage(uri, path);
+};
+
+/**
+ * Uploads a voice message for a service request
+ * @param customerId The customer's ID
+ * @param uri The local URI of the audio file
+ * @returns The download URL of the uploaded voice message
+ */
+export const uploadVoiceMessage = async (customerId: string, uri: string): Promise<string> => {
+    const path = `voiceMessages/${customerId}_${Date.now()}.m4a`;
+    return uploadImage(uri, path);
+};
+
+/**
+ * Uploads an image for a service request
+ * @param customerId The customer's ID
+ * @param uri The local URI of the image
+ * @param index The image index
+ * @returns The download URL of the uploaded image
+ */
+export const uploadServiceRequestImage = async (
+    customerId: string, 
+    uri: string, 
+    index: number
+): Promise<string> => {
+    const path = `serviceRequests/${customerId}/${Date.now()}_${index}.jpg`;
     return uploadImage(uri, path);
 };
