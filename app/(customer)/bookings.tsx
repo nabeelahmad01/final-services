@@ -172,7 +172,11 @@ export default function Bookings() {
         <SafeAreaView style={styles.container}>
             {/* Header */}
             <View style={styles.header}>
+                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                    <Ionicons name="arrow-back" size={24} color={COLORS.text} />
+                </TouchableOpacity>
                 <Text style={styles.headerTitle}>My Bookings</Text>
+                <View style={{ width: 24 }} />
             </View>
 
             {/* Tabs */}
@@ -273,13 +277,19 @@ const styles = StyleSheet.create({
         backgroundColor: COLORS.background,
     },
     header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
         padding: SIZES.padding,
         backgroundColor: COLORS.surface,
         borderBottomWidth: 1,
         borderBottomColor: COLORS.border,
     },
+    backButton: {
+        padding: 4,
+    },
     headerTitle: {
-        fontSize: 24,
+        fontSize: 20,
         fontWeight: 'bold',
         fontFamily: FONTS.bold,
         color: COLORS.text,

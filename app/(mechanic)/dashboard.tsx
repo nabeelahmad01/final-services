@@ -23,6 +23,7 @@ import {
     getMechanicReviews,
     getCompletedBookings,
     subscribeToMechanicScheduledBookings,
+    updateMechanic,
     Review,
 } from '@/services/firebase/firestore';
 import { COLORS, SIZES, CATEGORIES } from '@/constants/theme';
@@ -63,6 +64,7 @@ export default function MechanicDashboard() {
     const [reviews, setReviews] = useState<Review[]>([]);
     const [completedJobs, setCompletedJobs] = useState<Booking[]>([]);
     const [scheduledJobs, setScheduledJobs] = useState<Booking[]>([]);
+    const [isOnline, setIsOnline] = useState(true); // Online/Offline toggle
 
     useEffect(() => {
         if (!user) return;
@@ -131,6 +133,27 @@ export default function MechanicDashboard() {
         setRefreshing(false);
     };
 
+    // Toggle online/offline status
+    const toggleOnlineStatus = async () => {
+        if (!user) return;
+        const newStatus = !isOnline;
+        setIsOnline(newStatus);
+        try {
+            await updateMechanic(user.id, { isOnline: newStatus });
+        } catch (error) {
+            console.error('Error updating online status:', error);
+            // Revert on error
+            setIsOnline(!newStatus);
+        }
+    };
+
+    // Sync isOnline state with mechanic data
+    useEffect(() => {
+        if (mechanic?.isOnline !== undefined) {
+            setIsOnline(mechanic.isOnline);
+        }
+    }, [mechanic?.isOnline]);
+
     // Show loading spinner while fetching mechanic data
     if (!mechanic) {
         return (
@@ -148,53 +171,95 @@ export default function MechanicDashboard() {
                     <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
                 }
             >
-                {/* Header */}
+                {/* Enhanced Header */}
                 <View style={styles.header}>
-                    <View>
-                        <Text style={styles.greeting}>Dashboard</Text>
+                    <View style={styles.headerLeft}>
+                        <Text style={styles.greeting}>
+                            {new Date().getHours() < 12 ? 'Good Morning' : new Date().getHours() < 17 ? 'Good Afternoon' : 'Good Evening'} 👋
+                        </Text>
                         <Text style={styles.userName}>{mechanic.name}</Text>
                     </View>
-                    <TouchableOpacity onPress={() => router.push('/(shared)/profile')}>
-                        <Avatar name={mechanic.name} uri={mechanic.profilePic} size={48} />
+                    <View style={styles.headerRight}>
+                        <TouchableOpacity 
+                            style={styles.notificationBtn}
+                            onPress={() => router.push('/(mechanic)/requests')}
+                        >
+                            <Ionicons name="notifications" size={24} color={COLORS.text} />
+                            <View style={styles.notificationBadge}>
+                                <Text style={styles.notificationBadgeText}>!</Text>
+                            </View>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => router.push('/(shared)/profile')}>
+                            <Avatar name={mechanic.name} uri={mechanic.profilePic} size={48} />
+                        </TouchableOpacity>
+                    </View>
+                </View>
+
+                {/* Service Requests Call To Action */}
+                <TouchableOpacity 
+                    style={styles.serviceRequestsCTA}
+                    onPress={() => router.push('/(mechanic)/requests')}
+                >
+                    <View style={styles.ctaLeft}>
+                        <View style={styles.ctaIconBg}>
+                            <Ionicons name="document-text" size={28} color={COLORS.white} />
+                        </View>
+                        <View>
+                            <Text style={styles.ctaTitle}>View Service Requests</Text>
+                            <Text style={styles.ctaSubtitle}>Tap to see available jobs</Text>
+                        </View>
+                    </View>
+                    <View style={styles.ctaRight}>
+                        <Text style={styles.ctaArrow}>→</Text>
+                    </View>
+                </TouchableOpacity>
+
+                {/* Status Bar - Compact Verification + Online Toggle */}
+                <View style={styles.statusBar}>
+                    {/* Verification Badge */}
+                    {mechanic.isVerified ? (
+                        <View style={styles.verifiedBadge}>
+                            <Ionicons name="checkmark-circle" size={18} color={COLORS.success} />
+                            <Text style={styles.verifiedBadgeText}>Verified</Text>
+                        </View>
+                    ) : (
+                        <TouchableOpacity 
+                            style={styles.pendingBadge}
+                            onPress={() => router.push('/(mechanic)/kyc-upload')}
+                        >
+                            <Ionicons name="alert-circle" size={18} color={COLORS.warning} />
+                            <Text style={styles.pendingBadgeText}>KYC Pending</Text>
+                            <Ionicons name="chevron-forward" size={16} color={COLORS.warning} />
+                        </TouchableOpacity>
+                    )}
+
+                    {/* Online/Offline Toggle */}
+                    <TouchableOpacity 
+                        style={[styles.onlineToggle, isOnline ? styles.onlineActive : styles.onlineInactive]}
+                        onPress={toggleOnlineStatus}
+                    >
+                        <View style={[styles.toggleDot, isOnline && styles.toggleDotActive]} />
+                        <Text style={[styles.toggleText, isOnline && styles.toggleTextActive]}>
+                            {isOnline ? 'Online' : 'Offline'}
+                        </Text>
                     </TouchableOpacity>
                 </View>
 
-                {/* Verification Status */}
-                {!mechanic.isVerified && (
-                    <Card style={[styles.statusCard, { backgroundColor: COLORS.warning + '20', borderLeftWidth: 4, borderLeftColor: COLORS.warning }]}>
-                        <View style={styles.statusContent}>
-                            <View style={styles.statusIconContainer}>
-                                <Ionicons name="time-outline" size={32} color={COLORS.warning} />
-                            </View>
-                            <View style={{ flex: 1 }}>
-                                <Text style={styles.statusTitle}>KYC Verification Pending</Text>
-                                <Text style={styles.statusText}>
-                                    Complete your KYC to start receiving service requests
-                                </Text>
-                                <TouchableOpacity
-                                    style={styles.kycButton}
-                                    onPress={() => router.push('/(mechanic)/kyc-upload')}
-                                    activeOpacity={0.8}
-                                >
-                                    <Ionicons name="cloud-upload-outline" size={20} color={COLORS.white} />
-                                    <Text style={styles.kycButtonText}>Upload Documents</Text>
-                                    <Ionicons name="arrow-forward" size={20} color={COLORS.white} />
-                                </TouchableOpacity>
-                            </View>
+                {/* Improvement Tips - Show when rating is low or no reviews */}
+                {(calculateRating(mechanic) < 4 || mechanic.completedJobs < 5) && (
+                    <Card style={styles.tipsCard}>
+                        <View style={styles.tipsHeader}>
+                            <Ionicons name="bulb" size={20} color={COLORS.warning} />
+                            <Text style={styles.tipsTitle}>Tips to Grow</Text>
                         </View>
-                    </Card>
-                )}
-
-                {mechanic.isVerified && (
-                    <Card style={[styles.statusCard, { backgroundColor: COLORS.success + '20', borderLeftWidth: 4, borderLeftColor: COLORS.success }]}>
-                        <View style={styles.statusContent}>
-                            <View style={[styles.statusIconContainer, { backgroundColor: COLORS.success + '20' }]}>
-                                <Ionicons name="checkmark-circle" size={32} color={COLORS.success} />
-                            </View>
-                            <View style={{ flex: 1 }}>
-                                <Text style={[styles.statusTitle, { color: COLORS.success }]}>✓ Verified Account</Text>
-                                <Text style={styles.statusText}>You can now accept service requests</Text>
-                            </View>
+                        <View style={styles.tipsList}>
+                            {calculateRating(mechanic) < 4 && (
+                                <Text style={styles.tipItem}>💡 Complete jobs carefully to improve your rating</Text>
+                            )}
+                            {mechanic.completedJobs < 5 && (
+                                <Text style={styles.tipItem}>🚀 Accept more jobs to build your reputation</Text>
+                            )}
+                            <Text style={styles.tipItem}>⚡ Respond quickly to get more requests</Text>
                         </View>
                     </Card>
                 )}
@@ -242,104 +307,57 @@ export default function MechanicDashboard() {
                     </View>
                 </Card>
 
-                {/* Scheduled Jobs Section */}
-                {scheduledJobs.length > 0 && (
+                {/* Today's Activity Card */}
+                <View style={styles.todaySection}>
+                    <Text style={styles.todaySectionTitle}>📊 Today's Activity</Text>
+                    <Text style={styles.todayDate}>{new Date().toLocaleDateString('en-PK', { weekday: 'long', day: 'numeric', month: 'long' })}</Text>
+                    <View style={styles.todayStatsRow}>
+                        <View style={styles.todayStatItem}>
+                            <View style={[styles.todayStatIcon, { backgroundColor: COLORS.success + '20' }]}>
+                                <Ionicons name="checkmark-circle" size={24} color={COLORS.success} />
+                            </View>
+                            <Text style={styles.todayStatValue}>{completedJobs.filter(j => {
+                                if (!j.completedAt) return false;
+                                const today = new Date();
+                                return j.completedAt.toDateString() === today.toDateString();
+                            }).length}</Text>
+                            <Text style={styles.todayStatLabel}>Jobs Done</Text>
+                        </View>
+                        <View style={styles.todayStatItem}>
+                            <View style={[styles.todayStatIcon, { backgroundColor: COLORS.warning + '20' }]}>
+                                <Ionicons name="star" size={24} color={COLORS.warning} />
+                            </View>
+                            <Text style={styles.todayStatValue}>{reviews.filter(r => {
+                                const today = new Date();
+                                return r.createdAt.toDateString() === today.toDateString();
+                            }).length}</Text>
+                            <Text style={styles.todayStatLabel}>Reviews</Text>
+                        </View>
+                        <TouchableOpacity 
+                            style={styles.todayStatItem}
+                            onPress={() => router.push('/(mechanic)/requests')}
+                        >
+                            <View style={[styles.todayStatIcon, { backgroundColor: COLORS.primary + '20' }]}>
+                                <Ionicons name="calendar" size={24} color={COLORS.primary} />
+                            </View>
+                            <Text style={styles.todayStatValue}>{scheduledJobs.length}</Text>
+                            <Text style={styles.todayStatLabel}>Scheduled</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+
+                {/* COMMENTED OUT - Uncomment when needed
+                {/* Recent Reviews Section */}
+                {/* reviews.length > 0 && (
                     <View style={styles.section}>
                         <View style={styles.sectionHeader}>
-                            <Text style={styles.sectionTitle}>📅 Upcoming Scheduled Jobs</Text>
-                            <View style={[styles.countBadge, { backgroundColor: COLORS.info + '20' }]}>
-                                <Text style={[styles.countText, { color: COLORS.info }]}>{scheduledJobs.length}</Text>
-                            </View>
-                        </View>
-
-                        {scheduledJobs.map((job) => {
-                            const category = CATEGORIES.find((c) => c.id === job.category);
-                            const scheduledDateStr = job.scheduledDate
-                                ? (typeof (job.scheduledDate as any).toDate === 'function'
-                                    ? (job.scheduledDate as any).toDate().toLocaleDateString()
-                                    : job.scheduledDate.toLocaleDateString?.() || 'TBD')
-                                : 'TBD';
-
-                            return (
-                                <TouchableOpacity
-                                    key={job.id}
-                                    onPress={() => router.push({
-                                        pathname: '/(mechanic)/navigate',
-                                        params: { bookingId: job.id }
-                                    })}
-                                >
-                                    <Card style={[styles.jobHistoryCard, { borderLeftWidth: 4, borderLeftColor: COLORS.info }]}>
-                                        <View style={styles.jobHistoryHeader}>
-                                            <View style={[styles.jobCategoryIcon, { backgroundColor: (category?.color || COLORS.primary) + '20' }]}>
-                                                <Ionicons name={category?.icon as any || 'construct'} size={24} color={category?.color || COLORS.primary} />
-                                            </View>
-                                            <View style={styles.jobHistoryInfo}>
-                                                <Text style={styles.jobHistoryTitle}>{category?.name || 'Service'}</Text>
-                                                <Text style={styles.jobHistoryCustomer}>{job.customerName}</Text>
-                                            </View>
-                                            <View style={styles.jobHistoryRight}>
-                                                <Text style={styles.jobHistoryPrice}>PKR {job.price?.toLocaleString() || 0}</Text>
-                                            </View>
-                                        </View>
-                                        <View style={styles.scheduledInfoRow}>
-                                            <View style={styles.scheduledBadge}>
-                                                <Ionicons name="calendar" size={14} color={COLORS.info} />
-                                                <Text style={styles.scheduledBadgeText}>{scheduledDateStr}</Text>
-                                            </View>
-                                            {job.scheduledTime && (
-                                                <View style={styles.scheduledBadge}>
-                                                    <Ionicons name="time" size={14} color={COLORS.info} />
-                                                    <Text style={styles.scheduledBadgeText}>{job.scheduledTime}</Text>
-                                                </View>
-                                            )}
-                                        </View>
-                                        <View style={styles.actionRow}>
-                                            <TouchableOpacity
-                                                style={styles.actionButton}
-                                                onPress={() => job.customerPhone && Linking.openURL(`tel:${job.customerPhone}`)}
-                                            >
-                                                <Ionicons name="call" size={16} color={COLORS.success} />
-                                                <Text style={styles.actionButtonText}>Call</Text>
-                                            </TouchableOpacity>
-                                            <TouchableOpacity
-                                                style={[styles.actionButton, { backgroundColor: COLORS.primary + '15' }]}
-                                                onPress={() => router.push({
-                                                    pathname: '/(mechanic)/navigate',
-                                                    params: { bookingId: job.id }
-                                                })}
-                                            >
-                                                <Ionicons name="navigate" size={16} color={COLORS.primary} />
-                                                <Text style={[styles.actionButtonText, { color: COLORS.primary }]}>Navigate</Text>
-                                            </TouchableOpacity>
-                                        </View>
-                                    </Card>
-                                </TouchableOpacity>
-                            );
-                        })}
-                    </View>
-                )}
-
-                {/* Recent Reviews Section - Always show */}
-                <View style={styles.section}>
-                    <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>Recent Reviews</Text>
-                        {reviews.length > 0 && (
+                            <Text style={styles.sectionTitle}>⭐ Recent Reviews</Text>
                             <TouchableOpacity onPress={() => router.push('/(mechanic)/reviews')}>
                                 <Text style={styles.seeAllText}>See All</Text>
                             </TouchableOpacity>
-                        )}
-                    </View>
+                        </View>
 
-                    {reviews.length === 0 ? (
-                        <Card style={styles.emptyReviewCard}>
-                            <Ionicons name="chatbubbles-outline" size={40} color={COLORS.textSecondary} />
-                            <Text style={styles.emptyReviewTitle}>No Reviews Yet</Text>
-                            <Text style={styles.emptyReviewText}>
-                                Complete jobs to get reviews from customers
-                            </Text>
-                        </Card>
-                    ) : (
-                        reviews.map((review) => (
+                        {reviews.map((review) => (
                             <Card key={review.id} style={styles.reviewCard}>
                                 <View style={styles.reviewHeader}>
                                     <View style={styles.reviewerInfo}>
@@ -369,79 +387,83 @@ export default function MechanicDashboard() {
                                     </Text>
                                 </View>
                                 {review.comment && (
-                                    <Text style={styles.reviewComment}>{review.comment}</Text>
+                                    <Text style={styles.reviewComment}>"{review.comment}"</Text>
                                 )}
                             </Card>
-                        ))
-                    )}
-                </View>
+                        ))}
+                    </View>
+                ) */}
 
-                {/* Job History - Show completed jobs */}
-                {completedJobs.length > 0 && (
-                    <View style={styles.section}>
-                        <View style={styles.sectionHeader}>
-                            <Text style={styles.sectionTitle}>Recent Jobs</Text>
-                            <TouchableOpacity onPress={() => router.push('/(mechanic)/history')}>
-                                <Text style={styles.seeAllText}>See All</Text>
-                            </TouchableOpacity>
-                        </View>
+                {/* Recent Jobs - Improved Design */}
+                <View style={styles.section}>
+                    <View style={styles.sectionHeader}>
+                        <Text style={styles.sectionTitle}>🔧 Recent Jobs</Text>
+                        <TouchableOpacity onPress={() => router.push('/(mechanic)/history')}>
+                            <Text style={styles.seeAllText}>See All</Text>
+                        </TouchableOpacity>
+                    </View>
 
-                        {completedJobs.map((job) => {
+                    {completedJobs.length === 0 ? (
+                        <Card style={styles.emptyJobsCard}>
+                            <Ionicons name="construct-outline" size={40} color={COLORS.textSecondary} />
+                            <Text style={styles.emptyJobsTitle}>No Jobs Yet</Text>
+                            <Text style={styles.emptyJobsText}>Complete jobs to see them here</Text>
+                        </Card>
+                    ) : (
+                        completedJobs.map((job) => {
                             const category = CATEGORIES.find((c) => c.id === job.category);
                             return (
-                                <Card key={job.id} style={styles.jobHistoryCard}>
-                                    <View style={styles.jobHistoryHeader}>
-                                        <View style={[styles.jobCategoryIcon, { backgroundColor: (category?.color || COLORS.primary) + '20' }]}>
-                                            <Ionicons name={category?.icon as any || 'construct'} size={24} color={category?.color || COLORS.primary} />
+                                <Card key={job.id} style={styles.improvedJobCard}>
+                                    {/* Top Row: Category + Customer + Price */}
+                                    <View style={styles.jobCardTop}>
+                                        <View style={[styles.jobIconLarge, { backgroundColor: (category?.color || COLORS.primary) + '15' }]}>
+                                            <Ionicons name={category?.icon as any || 'construct'} size={28} color={category?.color || COLORS.primary} />
                                         </View>
-                                        <View style={styles.jobHistoryInfo}>
-                                            <Text style={styles.jobHistoryTitle}>{category?.name || 'Service'}</Text>
-                                            <Text style={styles.jobHistoryCustomer}>{job.customerName}</Text>
+                                        <View style={styles.jobCardInfo}>
+                                            <Text style={styles.jobCardCategory}>{category?.name || 'Service'}</Text>
+                                            <Text style={styles.jobCardCustomer}>{job.customerName}</Text>
                                         </View>
-                                        <View style={styles.jobHistoryRight}>
-                                            <Text style={styles.jobHistoryPrice}>PKR {job.price?.toLocaleString() || 0}</Text>
-                                            <Text style={styles.jobHistoryDate}>
-                                                {job.completedAt ? formatTimeAgo(job.completedAt) : 'Completed'}
-                                            </Text>
+                                        <View style={styles.jobCardPriceBox}>
+                                            <Text style={styles.jobCardPrice}>PKR {job.price?.toLocaleString() || 0}</Text>
+                                            <View style={styles.completedBadge}>
+                                                <Ionicons name="checkmark-circle" size={12} color={COLORS.success} />
+                                                <Text style={styles.completedBadgeText}>Done</Text>
+                                            </View>
                                         </View>
                                     </View>
-                                    {/* Show review info if available, or awaiting review */}
-                                    <View style={styles.jobReviewSection}>
+
+                                    {/* Rating Row */}
+                                    <View style={styles.jobCardRating}>
                                         {job.isReviewed && job.rating !== undefined ? (
-                                            <>
-                                                <View style={styles.jobReviewStars}>
+                                            <View style={styles.ratingContent}>
+                                                <View style={styles.ratingStarsRow}>
                                                     {[1, 2, 3, 4, 5].map((star) => (
                                                         <Ionicons
                                                             key={star}
                                                             name={star <= (job.rating || 0) ? 'star' : 'star-outline'}
-                                                            size={16}
+                                                            size={18}
                                                             color={COLORS.warning}
                                                         />
                                                     ))}
-                                                    <Text style={styles.jobReviewRating}>{job.rating}/5</Text>
+                                                    <Text style={styles.ratingText}>{job.rating}/5</Text>
                                                 </View>
                                                 {job.reviewComment && (
-                                                    <Text style={styles.jobReviewComment} numberOfLines={2}>
-                                                        "{job.reviewComment}"
-                                                    </Text>
+                                                    <Text style={styles.reviewQuote} numberOfLines={2}>"{job.reviewComment}"</Text>
                                                 )}
-                                            </>
+                                            </View>
                                         ) : (
-                                            <View style={styles.awaitingReviewRow}>
-                                                <Ionicons name="time-outline" size={14} color={COLORS.textSecondary} />
-                                                <Text style={styles.awaitingReviewText}>Awaiting customer review</Text>
+                                            <View style={styles.pendingReviewBadge}>
+                                                <Ionicons name="time-outline" size={16} color={COLORS.textSecondary} />
+                                                <Text style={styles.pendingReviewText}>Awaiting review</Text>
                                             </View>
                                         )}
-                                    </View>
-                                    <View style={styles.jobHistoryStatus}>
-                                        <Ionicons name="checkmark-circle" size={16} color={COLORS.success} />
-                                        <Text style={styles.jobHistoryStatusText}>Completed</Text>
+                                        <Text style={styles.jobDate}>{job.completedAt ? formatTimeAgo(job.completedAt) : ''}</Text>
                                     </View>
                                 </Card>
                             );
-                        })}
-                    </View>
-                )}
+                        })
+                    )}
+                </View>
 
                 {/* Quick Actions */}
                 <View style={styles.section}>
@@ -1173,5 +1195,332 @@ const styles = StyleSheet.create({
         fontSize: SIZES.sm,
         fontWeight: '600',
         color: COLORS.success,
+    },
+    // Enhanced Header Styles
+    headerLeft: {
+        flex: 1,
+    },
+    headerRight: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    notificationBtn: {
+        position: 'relative',
+        padding: 8,
+    },
+    notificationBadge: {
+        position: 'absolute',
+        top: 4,
+        right: 4,
+        backgroundColor: COLORS.danger,
+        width: 18,
+        height: 18,
+        borderRadius: 9,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    notificationBadgeText: {
+        color: COLORS.white,
+        fontSize: 10,
+        fontWeight: 'bold',
+    },
+    // Service Requests CTA
+    serviceRequestsCTA: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: COLORS.primary,
+        padding: 16,
+        borderRadius: 16,
+        marginBottom: 20,
+        shadowColor: COLORS.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 6,
+    },
+    ctaLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 14,
+    },
+    ctaIconBg: {
+        width: 52,
+        height: 52,
+        borderRadius: 26,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    ctaTitle: {
+        fontSize: SIZES.lg,
+        fontWeight: 'bold',
+        color: COLORS.white,
+    },
+    ctaSubtitle: {
+        fontSize: SIZES.sm,
+        color: 'rgba(255,255,255,0.8)',
+        marginTop: 2,
+    },
+    ctaRight: {
+        paddingRight: 4,
+    },
+    ctaArrow: {
+        fontSize: 24,
+        color: COLORS.white,
+    },
+    // Today's Activity Section
+    todaySection: {
+        backgroundColor: COLORS.surface,
+        borderRadius: 16,
+        padding: 16,
+        marginBottom: 20,
+    },
+    todaySectionTitle: {
+        fontSize: SIZES.lg,
+        fontWeight: 'bold',
+        color: COLORS.text,
+    },
+    todayDate: {
+        fontSize: SIZES.sm,
+        color: COLORS.textSecondary,
+        marginTop: 4,
+        marginBottom: 16,
+    },
+    todayStatsRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+    },
+    todayStatItem: {
+        alignItems: 'center',
+    },
+    todayStatIcon: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    todayStatValue: {
+        fontSize: SIZES.xl,
+        fontWeight: 'bold',
+        color: COLORS.text,
+    },
+    todayStatLabel: {
+        fontSize: SIZES.xs,
+        color: COLORS.textSecondary,
+        marginTop: 2,
+    },
+    // Improved Job Cards
+    emptyJobsCard: {
+        alignItems: 'center',
+        padding: 32,
+        gap: 8,
+    },
+    emptyJobsTitle: {
+        fontSize: SIZES.base,
+        fontWeight: '600',
+        color: COLORS.text,
+        marginTop: 8,
+    },
+    emptyJobsText: {
+        fontSize: SIZES.sm,
+        color: COLORS.textSecondary,
+        textAlign: 'center',
+    },
+    improvedJobCard: {
+        marginBottom: 12,
+        padding: 16,
+        borderRadius: 16,
+    },
+    jobCardTop: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    jobIconLarge: {
+        width: 56,
+        height: 56,
+        borderRadius: 28,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    jobCardInfo: {
+        flex: 1,
+    },
+    jobCardCategory: {
+        fontSize: SIZES.base,
+        fontWeight: 'bold',
+        color: COLORS.text,
+    },
+    jobCardCustomer: {
+        fontSize: SIZES.sm,
+        color: COLORS.textSecondary,
+        marginTop: 2,
+    },
+    jobCardPriceBox: {
+        alignItems: 'flex-end',
+    },
+    jobCardPrice: {
+        fontSize: SIZES.lg,
+        fontWeight: 'bold',
+        color: COLORS.success,
+    },
+    completedBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        marginTop: 4,
+    },
+    completedBadgeText: {
+        fontSize: SIZES.xs,
+        color: COLORS.success,
+        fontWeight: '500',
+    },
+    jobCardRating: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        marginTop: 14,
+        paddingTop: 14,
+        borderTopWidth: 1,
+        borderTopColor: COLORS.border,
+    },
+    ratingContent: {
+        flex: 1,
+    },
+    ratingStarsRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 2,
+    },
+    ratingText: {
+        fontSize: SIZES.sm,
+        fontWeight: '600',
+        color: COLORS.warning,
+        marginLeft: 6,
+    },
+    reviewQuote: {
+        fontSize: SIZES.sm,
+        color: COLORS.textSecondary,
+        fontStyle: 'italic',
+        marginTop: 6,
+        marginLeft: 2,
+    },
+    pendingReviewBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: COLORS.background,
+        paddingVertical: 6,
+        paddingHorizontal: 10,
+        borderRadius: 12,
+    },
+    pendingReviewText: {
+        fontSize: SIZES.sm,
+        color: COLORS.textSecondary,
+    },
+    jobDate: {
+        fontSize: SIZES.xs,
+        color: COLORS.textSecondary,
+    },
+    // Status Bar - Compact design
+    statusBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 16,
+    },
+    verifiedBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: COLORS.success + '15',
+        paddingVertical: 8,
+        paddingHorizontal: 14,
+        borderRadius: 20,
+    },
+    verifiedBadgeText: {
+        fontSize: SIZES.sm,
+        fontWeight: '600',
+        color: COLORS.success,
+    },
+    pendingBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: COLORS.warning + '15',
+        paddingVertical: 8,
+        paddingHorizontal: 14,
+        borderRadius: 20,
+    },
+    pendingBadgeText: {
+        fontSize: SIZES.sm,
+        fontWeight: '600',
+        color: COLORS.warning,
+    },
+    // Online/Offline Toggle
+    onlineToggle: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        paddingVertical: 8,
+        paddingHorizontal: 14,
+        borderRadius: 20,
+        borderWidth: 2,
+    },
+    onlineActive: {
+        backgroundColor: COLORS.success + '15',
+        borderColor: COLORS.success,
+    },
+    onlineInactive: {
+        backgroundColor: COLORS.textSecondary + '15',
+        borderColor: COLORS.textSecondary,
+    },
+    toggleDot: {
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+        backgroundColor: COLORS.textSecondary,
+    },
+    toggleDotActive: {
+        backgroundColor: COLORS.success,
+    },
+    toggleText: {
+        fontSize: SIZES.sm,
+        fontWeight: '600',
+        color: COLORS.textSecondary,
+    },
+    toggleTextActive: {
+        color: COLORS.success,
+    },
+    // Tips Card
+    tipsCard: {
+        marginBottom: 16,
+        padding: 14,
+        backgroundColor: COLORS.warning + '08',
+        borderWidth: 1,
+        borderColor: COLORS.warning + '30',
+    },
+    tipsHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 10,
+    },
+    tipsTitle: {
+        fontSize: SIZES.base,
+        fontWeight: 'bold',
+        color: COLORS.text,
+    },
+    tipsList: {
+        gap: 6,
+    },
+    tipItem: {
+        fontSize: SIZES.sm,
+        color: COLORS.textSecondary,
+        lineHeight: 20,
     },
 });

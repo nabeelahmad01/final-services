@@ -454,7 +454,7 @@ export default function MechanicRequests() {
         <SafeAreaView style={styles.container}>
             {/* Header */}
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.push('/(mechanic)/dashboard')}>
+                <TouchableOpacity onPress={() => router.back()}>
                     <Ionicons name="arrow-back" size={24} color={COLORS.text} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Service Requests</Text>

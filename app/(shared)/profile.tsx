@@ -63,20 +63,55 @@ export default function ProfileScreen() {
             route: '/(shared)/edit-profile',
             color: COLORS.primary,
         },
-        {
-            icon: 'calendar-outline',
-            title: isUrdu ? 'میری بکنگز' : 'My Bookings',
-            subtitle: isUrdu ? 'سروس ہسٹری دیکھیں' : 'View service history',
-            route: '/(customer)/bookings',
-            color: '#5E35B1',
-        },
-        {
-            icon: 'heart-outline',
-            title: isUrdu ? 'پسندیدہ مستری' : 'Favorite Mechanics',
-            subtitle: isUrdu ? 'محفوظ شدہ مستری' : 'Saved mechanics',
-            route: '/(customer)/favorites',
-            color: COLORS.danger,
-        },
+        // Customer-only items
+        ...(user.role === 'customer' ? [
+            {
+                icon: 'calendar-outline',
+                title: isUrdu ? 'میری بکنگز' : 'My Bookings',
+                subtitle: isUrdu ? 'سروس ہسٹری دیکھیں' : 'View service history',
+                route: '/(customer)/bookings',
+                color: '#5E35B1',
+            },
+            {
+                icon: 'heart-outline',
+                title: isUrdu ? 'پسندیدہ مستری' : 'Favorite Mechanics',
+                subtitle: isUrdu ? 'محفوظ شدہ مستری' : 'Saved mechanics',
+                route: '/(customer)/favorites',
+                color: COLORS.danger,
+            },
+        ] : []),
+        // Mechanic-only items
+        ...(user.role === 'mechanic' ? [
+            {
+                icon: 'cash-outline',
+                title: isUrdu ? 'کمائی' : 'My Earnings',
+                subtitle: isUrdu ? 'آمدنی اور اعدادوشمار' : 'Income and stats',
+                route: '/(mechanic)/earnings',
+                color: COLORS.success,
+            },
+            {
+                icon: 'wallet-outline',
+                title: isUrdu ? 'والٹ' : 'Wallet & Diamonds',
+                subtitle: isUrdu ? 'ڈائمنڈز خریدیں' : 'Buy diamonds, top-up',
+                route: '/(mechanic)/wallet',
+                color: '#5E35B1',
+            },
+            {
+                icon: 'list-outline',
+                title: isUrdu ? 'جاب ہسٹری' : 'Job History',
+                subtitle: isUrdu ? 'مکمل شدہ کام' : 'Completed jobs',
+                route: '/(mechanic)/history',
+                color: '#1976D2',
+            },
+            {
+                icon: 'star-outline',
+                title: isUrdu ? 'ریویوز' : 'My Reviews',
+                subtitle: isUrdu ? 'کسٹمر فیڈبیک' : 'Customer feedback',
+                route: '/(mechanic)/reviews',
+                color: COLORS.warning,
+            },
+        ] : []),
+        // Common items for both
         {
             icon: 'notifications-outline',
             title: isUrdu ? 'اطلاعات' : 'Notifications',

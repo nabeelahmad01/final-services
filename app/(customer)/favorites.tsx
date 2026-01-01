@@ -129,10 +129,15 @@ export default function Favorites() {
         <SafeAreaView style={styles.container}>
             {/* Header */}
             <View style={styles.header}>
-                <Text style={styles.headerTitle}>Favorites</Text>
-                <Text style={styles.headerSubtitle}>
-                    Your saved mechanics for quick access
-                </Text>
+                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                    <Ionicons name="arrow-back" size={24} color={COLORS.text} />
+                </TouchableOpacity>
+                <View style={styles.headerContent}>
+                    <Text style={styles.headerTitle}>Favorites</Text>
+                    <Text style={styles.headerSubtitle}>
+                        Your saved mechanics for quick access
+                    </Text>
+                </View>
             </View>
 
             {/* Content */}
@@ -244,17 +249,26 @@ const styles = StyleSheet.create({
         backgroundColor: COLORS.background,
     },
     header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
         padding: SIZES.padding,
         backgroundColor: COLORS.surface,
         borderBottomWidth: 1,
         borderBottomColor: COLORS.border,
     },
+    backButton: {
+        padding: 4,
+    },
+    headerContent: {
+        flex: 1,
+    },
     headerTitle: {
-        fontSize: 24,
+        fontSize: 20,
         fontWeight: 'bold',
         fontFamily: FONTS.bold,
         color: COLORS.text,
-        marginBottom: 4,
+        marginBottom: 2,
     },
     headerSubtitle: {
         fontSize: SIZES.sm,

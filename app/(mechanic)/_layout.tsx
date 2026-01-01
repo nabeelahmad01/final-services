@@ -14,6 +14,7 @@ export default function MechanicLayout() {
                 tabBarActiveTintColor: COLORS.primary,
                 tabBarInactiveTintColor: COLORS.textSecondary,
                 tabBarStyle: {
+                    display: 'none', // Hide bottom tabs - navigate via dashboard
                     backgroundColor: COLORS.surface,
                     borderTopWidth: 1,
                     borderTopColor: COLORS.border,

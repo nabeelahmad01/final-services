@@ -57,6 +57,7 @@ export interface Mechanic extends User {
         number: string;
         color: string;
     };
+    isOnline?: boolean; // Online/Offline status for receiving requests
 }
 
 export interface ServiceRequest {

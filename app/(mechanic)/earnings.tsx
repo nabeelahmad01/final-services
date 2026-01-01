@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Dimensions, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -103,8 +103,13 @@ export default function Earnings() {
         <SafeAreaView style={styles.container}>
             {/* Header */}
             <View style={styles.header}>
-                <Text style={styles.headerTitle}>Earnings</Text>
-                <Text style={styles.headerSubtitle}>Track your income and transactions</Text>
+                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                    <Ionicons name="arrow-back" size={24} color={COLORS.text} />
+                </TouchableOpacity>
+                <View>
+                    <Text style={styles.headerTitle}>Earnings</Text>
+                    <Text style={styles.headerSubtitle}>Track your income and transactions</Text>
+                </View>
             </View>
 
             <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
@@ -235,10 +240,16 @@ const styles = StyleSheet.create({
         backgroundColor: COLORS.background,
     },
     header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
         padding: SIZES.padding,
         backgroundColor: COLORS.surface,
         borderBottomWidth: 1,
         borderBottomColor: COLORS.border,
+    },
+    backButton: {
+        padding: 4,
     },
     headerTitle: {
         fontSize: 24,
