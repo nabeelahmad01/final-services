@@ -42,7 +42,7 @@
         }
       },
       "googleServicesFile": "./google-services.json",
-      "versionCode": 3
+      "versionCode": 4
     },
     "web": {
       "favicon": "./assets/favicon.png",
