@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
     View,
     Text,
@@ -9,40 +9,25 @@ import {
     Platform,
     ScrollView,
     ActivityIndicator,
-    Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SIZES, FONTS } from '@/constants/theme';
-import { sendPasswordReset, sendOTP, verifyOTP, loginWithPhone } from '@/services/firebase/phoneAuth';
 import { useModal, showErrorModal, showSuccessModal } from '@/utils/modalService';
-
-type Step = 'phone' | 'otp' | 'newPassword';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { firestore } from '@/services/firebase/config';
+import { useTranslation } from 'react-i18next';
 
 export default function ForgotPasswordScreen() {
     const router = useRouter();
+    const { t, i18n } = useTranslation();
+    const isUrdu = i18n.language === 'ur';
     const { showModal } = useModal();
 
-    const [step, setStep] = useState<Step>('phone');
     const [phone, setPhone] = useState('');
-    const [otp, setOtp] = useState(['', '', '', '', '', '']);
-    const [newPassword, setNewPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
     const [loading, setLoading] = useState(false);
-    const [showPassword, setShowPassword] = useState(false);
-    const [resendTimer, setResendTimer] = useState(0);
-    const [devOtp, setDevOtp] = useState<string | null>(null);
-
-    const inputRefs = useRef<TextInput[]>([]);
-
-    useEffect(() => {
-        if (resendTimer > 0) {
-            const timer = setTimeout(() => setResendTimer(resendTimer - 1), 1000);
-            return () => clearTimeout(timer);
-        }
-    }, [resendTimer]);
 
     const formatPhoneNumber = (text: string) => {
         const cleaned = text.replace(/\D/g, '');
@@ -56,315 +41,55 @@ export default function ForgotPasswordScreen() {
         setPhone(formatted);
     };
 
-    const handleSendOTP = async () => {
+    const handleContactAdmin = async () => {
         const cleanNumber = phone.replace(/\s/g, '');
         if (cleanNumber.length < 10) {
-            showErrorModal(showModal, 'Invalid Number', 'Please enter a valid phone number');
+            showErrorModal(showModal, t('common.error'), t('errors.invalidPhone'));
             return;
         }
 
         setLoading(true);
         try {
             const fullNumber = '+92' + cleanNumber.replace(/^0/, '');
-            const result = await sendOTP(fullNumber);
 
-            if (result.success) {
-                setResendTimer(60);
-                if (result.otp) {
-                    setDevOtp(result.otp);
-                    Alert.alert(
-                        '🔐 Development Mode',
-                        `Your OTP code is: ${result.otp}`,
-                        [{ text: 'OK', onPress: () => setStep('otp') }]
-                    );
-                } else {
-                    setStep('otp');
-                }
-            } else {
-                showErrorModal(showModal, 'Error', result.error || 'Failed to send OTP');
+            // Check if account exists
+            const [mechanicsSnap, customersSnap] = await Promise.all([
+                getDocs(query(collection(firestore, 'mechanics'), where('phone', '==', fullNumber))),
+                getDocs(query(collection(firestore, 'customers'), where('phone', '==', fullNumber)))
+            ]);
+
+            if (mechanicsSnap.empty && customersSnap.empty) {
+                showErrorModal(
+                    showModal,
+                    isUrdu ? 'اکاؤنٹ نہیں ملا' : 'Account not found',
+                    isUrdu ? 'اس نمبر سے کوئی اکاؤنٹ رجسٹرڈ نہیں ہے۔ براہ کرم نیا اکاؤنٹ بنائیں۔' : 'No account is registered with this number. Please register a new account.'
+                );
+                return;
             }
-        } catch (error: any) {
-            showErrorModal(showModal, 'Error', error.message);
-        } finally {
-            setLoading(false);
-        }
-    };
 
-    const handleOtpChange = (value: string, index: number) => {
-        const numericValue = value.replace(/\D/g, '');
-        const newOtp = [...otp];
-        newOtp[index] = numericValue.slice(-1);
-        setOtp(newOtp);
-
-        if (numericValue && index < 5) {
-            inputRefs.current[index + 1]?.focus();
-        }
-
-        if (index === 5 && numericValue) {
-            const fullOtp = [...newOtp.slice(0, 5), numericValue.slice(-1)].join('');
-            if (fullOtp.length === 6) {
-                handleVerifyOTP(fullOtp);
+            // Get the user's name
+            let userName = '';
+            if (!mechanicsSnap.empty) {
+                userName = mechanicsSnap.docs[0].data().name;
+            } else if (!customersSnap.empty) {
+                userName = customersSnap.docs[0].data().name;
             }
-        }
-    };
 
-    const handleKeyPress = (e: any, index: number) => {
-        if (e.nativeEvent.key === 'Backspace' && !otp[index] && index > 0) {
-            inputRefs.current[index - 1]?.focus();
-        }
-    };
-
-    const handleVerifyOTP = async (otpCode?: string) => {
-        const code = otpCode || otp.join('');
-        if (code.length !== 6) {
-            showErrorModal(showModal, 'Invalid OTP', 'Please enter the 6-digit code');
-            return;
-        }
-
-        setLoading(true);
-        try {
-            const result = await verifyOTP(code);
-            if (result.success) {
-                setStep('newPassword');
-            } else {
-                showErrorModal(showModal, 'Invalid Code', result.error || 'Please check and try again');
-            }
-        } catch (error: any) {
-            showErrorModal(showModal, 'Error', error.message);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleResetPassword = async () => {
-        if (newPassword.length < 6) {
-            showErrorModal(showModal, 'Weak Password', 'Password must be at least 6 characters');
-            return;
-        }
-        if (newPassword !== confirmPassword) {
-            showErrorModal(showModal, 'Mismatch', 'Passwords do not match');
-            return;
-        }
-
-        setLoading(true);
-        try {
-            // Login with new password to update it
-            const fullNumber = '+92' + phone.replace(/\s/g, '').replace(/^0/, '');
-            
             showSuccessModal(
                 showModal,
-                'Password Reset',
-                'Your password has been reset. Please login with your new password.',
+                isUrdu ? 'اکاؤنٹ تصدیق' : 'Account Confirmed',
+                isUrdu 
+                    ? `اکاؤنٹ "${userName}" ملا۔\n\nپاسورڈ ری سیٹ کے لیے ایڈمن سے رابطہ کریں یا نیا اکاؤنٹ بنائیں۔`
+                    : `Account "${userName}" found.\n\nPlease contact administration to reset your password or create a new account.`,
                 () => router.replace('/(auth)/phone-login')
             );
+
         } catch (error: any) {
-            showErrorModal(showModal, 'Error', error.message);
+            showErrorModal(showModal, t('common.error'), error.message);
         } finally {
             setLoading(false);
         }
     };
-
-    const renderPhoneStep = () => (
-        <>
-            <View style={styles.header}>
-                <LinearGradient
-                    colors={[COLORS.primary, COLORS.primaryDark]}
-                    style={styles.iconGradient}
-                >
-                    <Ionicons name="key" size={40} color={COLORS.white} />
-                </LinearGradient>
-                <Text style={styles.title}>Forgot Password?</Text>
-                <Text style={styles.subtitle}>
-                    Enter your phone number and we'll send you an OTP to reset your password
-                </Text>
-            </View>
-
-            <View style={styles.phoneInputContainer}>
-                <View style={styles.countryCode}>
-                    <Text style={styles.flag}>🇵🇰</Text>
-                    <Text style={styles.countryCodeText}>+92</Text>
-                </View>
-                <TextInput
-                    style={styles.phoneInput}
-                    placeholder="3XX XXX XXXX"
-                    placeholderTextColor={COLORS.textSecondary}
-                    value={phone}
-                    onChangeText={formatPhoneNumber}
-                    keyboardType="phone-pad"
-                    maxLength={12}
-                    autoFocus
-                />
-            </View>
-
-            <TouchableOpacity
-                style={[
-                    styles.primaryButton,
-                    phone.replace(/\s/g, '').length < 10 && styles.buttonDisabled
-                ]}
-                onPress={handleSendOTP}
-                disabled={loading || phone.replace(/\s/g, '').length < 10}
-            >
-                {loading ? (
-                    <ActivityIndicator color={COLORS.white} />
-                ) : (
-                    <>
-                        <Text style={styles.buttonText}>Send OTP</Text>
-                        <Ionicons name="arrow-forward" size={20} color={COLORS.white} />
-                    </>
-                )}
-            </TouchableOpacity>
-        </>
-    );
-
-    const renderOTPStep = () => (
-        <>
-            <View style={styles.header}>
-                <LinearGradient
-                    colors={[COLORS.primary, COLORS.primaryDark]}
-                    style={styles.iconGradient}
-                >
-                    <Ionicons name="shield-checkmark" size={40} color={COLORS.white} />
-                </LinearGradient>
-                <Text style={styles.title}>Verify OTP</Text>
-                <Text style={styles.subtitle}>
-                    Enter the 6-digit code sent to{'\n'}
-                    <Text style={styles.phoneText}>+92 {phone}</Text>
-                </Text>
-            </View>
-
-            {devOtp && (
-                <View style={styles.devOtpContainer}>
-                    <Ionicons name="bug" size={18} color={COLORS.warning} />
-                    <Text style={styles.devOtpText}>Dev OTP: {devOtp}</Text>
-                </View>
-            )}
-
-            <View style={styles.otpContainer}>
-                {otp.map((digit, index) => (
-                    <TextInput
-                        key={index}
-                        ref={(ref) => {
-                            if (ref) inputRefs.current[index] = ref;
-                        }}
-                        style={[
-                            styles.otpInput,
-                            digit && styles.otpInputFilled,
-                        ]}
-                        value={digit}
-                        onChangeText={(value) => handleOtpChange(value, index)}
-                        onKeyPress={(e) => handleKeyPress(e, index)}
-                        keyboardType="number-pad"
-                        maxLength={1}
-                        selectTextOnFocus
-                        autoFocus={index === 0}
-                    />
-                ))}
-            </View>
-
-            <View style={styles.resendContainer}>
-                {resendTimer > 0 ? (
-                    <Text style={styles.timerText}>
-                        Resend code in <Text style={styles.timerNumber}>{resendTimer}s</Text>
-                    </Text>
-                ) : (
-                    <TouchableOpacity onPress={handleSendOTP} disabled={loading}>
-                        <Text style={styles.resendLink}>Resend OTP</Text>
-                    </TouchableOpacity>
-                )}
-            </View>
-
-            <TouchableOpacity
-                style={[
-                    styles.primaryButton,
-                    otp.join('').length !== 6 && styles.buttonDisabled
-                ]}
-                onPress={() => handleVerifyOTP()}
-                disabled={loading || otp.join('').length !== 6}
-            >
-                {loading ? (
-                    <ActivityIndicator color={COLORS.white} />
-                ) : (
-                    <>
-                        <Text style={styles.buttonText}>Verify</Text>
-                        <Ionicons name="checkmark-circle" size={20} color={COLORS.white} />
-                    </>
-                )}
-            </TouchableOpacity>
-        </>
-    );
-
-    const renderNewPasswordStep = () => (
-        <>
-            <View style={styles.header}>
-                <LinearGradient
-                    colors={[COLORS.success, '#00897B']}
-                    style={styles.iconGradient}
-                >
-                    <Ionicons name="lock-open" size={40} color={COLORS.white} />
-                </LinearGradient>
-                <Text style={styles.title}>Create New Password</Text>
-                <Text style={styles.subtitle}>
-                    Your identity has been verified. Set your new password.
-                </Text>
-            </View>
-
-            <View style={styles.inputGroup}>
-                <Text style={styles.label}>New Password</Text>
-                <View style={styles.inputContainer}>
-                    <Ionicons name="lock-closed-outline" size={20} color={COLORS.textSecondary} />
-                    <TextInput
-                        style={styles.input}
-                        placeholder="Min 6 characters"
-                        placeholderTextColor={COLORS.textSecondary}
-                        value={newPassword}
-                        onChangeText={setNewPassword}
-                        secureTextEntry={!showPassword}
-                    />
-                    <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                        <Ionicons
-                            name={showPassword ? "eye-off" : "eye"}
-                            size={20}
-                            color={COLORS.textSecondary}
-                        />
-                    </TouchableOpacity>
-                </View>
-            </View>
-
-            <View style={styles.inputGroup}>
-                <Text style={styles.label}>Confirm Password</Text>
-                <View style={styles.inputContainer}>
-                    <Ionicons name="lock-closed-outline" size={20} color={COLORS.textSecondary} />
-                    <TextInput
-                        style={styles.input}
-                        placeholder="Re-enter password"
-                        placeholderTextColor={COLORS.textSecondary}
-                        value={confirmPassword}
-                        onChangeText={setConfirmPassword}
-                        secureTextEntry={!showPassword}
-                    />
-                </View>
-            </View>
-
-            <TouchableOpacity
-                style={[
-                    styles.primaryButton,
-                    { backgroundColor: COLORS.success },
-                    (!newPassword || !confirmPassword) && styles.buttonDisabled
-                ]}
-                onPress={handleResetPassword}
-                disabled={loading || !newPassword || !confirmPassword}
-            >
-                {loading ? (
-                    <ActivityIndicator color={COLORS.white} />
-                ) : (
-                    <>
-                        <Text style={styles.buttonText}>Reset Password</Text>
-                        <Ionicons name="checkmark-done" size={20} color={COLORS.white} />
-                    </>
-                )}
-            </TouchableOpacity>
-        </>
-    );
 
     return (
         <SafeAreaView style={styles.container}>
@@ -378,31 +103,100 @@ export default function ForgotPasswordScreen() {
                     showsVerticalScrollIndicator={false}
                 >
                     <TouchableOpacity
-                        style={styles.backButton}
-                        onPress={() => {
-                            if (step === 'otp') {
-                                setStep('phone');
-                                setOtp(['', '', '', '', '', '']);
-                            } else if (step === 'newPassword') {
-                                setStep('otp');
-                            } else {
-                                router.back();
-                            }
-                        }}
+                        style={[styles.backButton, isUrdu && { alignSelf: 'flex-end' }]}
+                        onPress={() => router.back()}
                     >
-                        <Ionicons name="arrow-back" size={24} color={COLORS.text} />
+                        <Ionicons name={isUrdu ? "arrow-forward" : "arrow-back"} size={24} color={COLORS.text} />
                     </TouchableOpacity>
 
-                    {step === 'phone' && renderPhoneStep()}
-                    {step === 'otp' && renderOTPStep()}
-                    {step === 'newPassword' && renderNewPasswordStep()}
+                    <View style={styles.header}>
+                        <LinearGradient
+                            colors={[COLORS.primary, COLORS.primaryDark]}
+                            style={styles.iconGradient}
+                        >
+                            <Ionicons name="key" size={40} color={COLORS.white} />
+                        </LinearGradient>
+                        <Text style={[styles.title, isUrdu && styles.urduText]}>
+                            {t('auth.forgotPassword')}
+                        </Text>
+                        <Text style={[styles.subtitle, isUrdu && styles.urduText]}>
+                            {isUrdu ? 'اپنا فون نمبر درج کریں تاکہ ہم آپ کا اکاؤنٹ تلاش کر سکیں' : 'Enter your phone number so we can find your account'}
+                        </Text>
+                    </View>
+
+                    <View style={[styles.phoneInputContainer, isUrdu && { flexDirection: 'row-reverse' }]}>
+                        <View style={[styles.countryCode, isUrdu && { borderRightWidth: 0, borderLeftWidth: 1, borderLeftColor: COLORS.border }]}>
+                            <Text style={styles.flag}>🇵🇰</Text>
+                            <Text style={styles.countryCodeText}>+92</Text>
+                        </View>
+                        <TextInput
+                            style={[styles.phoneInput, isUrdu && styles.rtlInput]}
+                            placeholder="3XX XXX XXXX"
+                            placeholderTextColor={COLORS.textSecondary}
+                            value={phone}
+                            onChangeText={formatPhoneNumber}
+                            keyboardType="phone-pad"
+                            maxLength={12}
+                            autoFocus
+                        />
+                    </View>
+
+                    {/* Info Box */}
+                    <View style={[styles.infoContainer, isUrdu && { flexDirection: 'row-reverse' }]}>
+                        <Ionicons name="information-circle" size={20} color={COLORS.primary} />
+                        <Text style={[styles.infoText, isUrdu && styles.urduText]}>
+                            {isUrdu 
+                                ? "پاسورڈ ری سیٹ کے لیے ایڈمن آپ کی شناخت تصدیق کرے گا اور نیا پاسورڈ سیٹ کرے گا۔" 
+                                : "The administrator will verify your identity and set a new password for password reset."}
+                        </Text>
+                    </View>
 
                     <TouchableOpacity
-                        style={styles.backToLoginButton}
+                        style={[
+                            styles.primaryButton,
+                            phone.replace(/\s/g, '').length < 10 && styles.buttonDisabled,
+                            isUrdu && { flexDirection: 'row-reverse' }
+                        ]}
+                        onPress={handleContactAdmin}
+                        disabled={loading || phone.replace(/\s/g, '').length < 10}
+                    >
+                        {loading ? (
+                            <ActivityIndicator color={COLORS.white} />
+                        ) : (
+                            <>
+                                <Text style={styles.buttonText}>
+                                    {isUrdu ? "اکاؤنٹ تلاش کریں" : "Find Account"}
+                                </Text>
+                                <Ionicons name="search" size={20} color={COLORS.white} />
+                            </>
+                        )}
+                    </TouchableOpacity>
+
+                    {/* Create New Account Option */}
+                    <View style={styles.dividerContainer}>
+                        <View style={styles.dividerLine} />
+                        <Text style={styles.dividerText}>{t('common.or')}</Text>
+                        <View style={styles.dividerLine} />
+                    </View>
+
+                    <TouchableOpacity
+                        style={[styles.newAccountButton, isUrdu && { flexDirection: 'row-reverse' }]}
+                        onPress={() => router.replace('/(auth)/complete-profile')}
+                    >
+                        <Ionicons name="person-add-outline" size={20} color={COLORS.primary} />
+                        <Text style={styles.newAccountText}>
+                            {t('auth.signup')}
+                        </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[styles.backToLoginButton, isUrdu && { flexDirection: 'row-reverse' }]}
                         onPress={() => router.replace('/(auth)/phone-login')}
                     >
-                        <Ionicons name="arrow-back-circle" size={18} color={COLORS.primary} />
-                        <Text style={styles.backToLoginText}>Back to Login</Text>
+                        <Ionicons name={isUrdu ? "arrow-forward-circle" : "arrow-back-circle"} size={18} color={COLORS.primary} />
+                        <Text style={styles.backToLoginText}>
+                            {isUrdu ? "لاگ ان پر واپس جائیں" : "Back to Login"}
+                        </Text>
                     </TouchableOpacity>
                 </ScrollView>
             </KeyboardAvoidingView>
@@ -462,10 +256,6 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         lineHeight: 24,
     },
-    phoneText: {
-        fontFamily: FONTS.semiBold,
-        color: COLORS.primary,
-    },
     phoneInputContainer: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -474,7 +264,7 @@ const styles = StyleSheet.create({
         borderWidth: 2,
         borderColor: COLORS.border,
         overflow: 'hidden',
-        marginBottom: 24,
+        marginBottom: 16,
     },
     countryCode: {
         flexDirection: 'row',
@@ -502,6 +292,22 @@ const styles = StyleSheet.create({
         color: COLORS.text,
         letterSpacing: 1,
     },
+    infoContainer: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        backgroundColor: COLORS.primary + '10',
+        padding: 14,
+        borderRadius: 12,
+        marginBottom: 24,
+        gap: 10,
+    },
+    infoText: {
+        flex: 1,
+        fontSize: SIZES.sm,
+        fontFamily: FONTS.regular,
+        color: COLORS.text,
+        lineHeight: 22,
+    },
     primaryButton: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -526,86 +332,37 @@ const styles = StyleSheet.create({
         fontFamily: FONTS.bold,
         color: COLORS.white,
     },
-    devOtpContainer: {
+    dividerContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: COLORS.warning + '20',
-        padding: 12,
-        borderRadius: 10,
-        marginBottom: 20,
-        gap: 8,
+        marginVertical: 24,
+        gap: 16,
     },
-    devOtpText: {
+    dividerLine: {
+        flex: 1,
+        height: 1,
+        backgroundColor: COLORS.border,
+    },
+    dividerText: {
         fontSize: SIZES.base,
-        fontFamily: FONTS.semiBold,
-        color: COLORS.warning,
-    },
-    otpContainer: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        gap: 10,
-        marginBottom: 24,
-    },
-    otpInput: {
-        width: 48,
-        height: 56,
-        borderRadius: 14,
-        borderWidth: 2,
-        borderColor: COLORS.border,
-        backgroundColor: COLORS.background,
-        fontSize: 22,
-        fontFamily: FONTS.bold,
-        color: COLORS.text,
-        textAlign: 'center',
-    },
-    otpInputFilled: {
-        borderColor: COLORS.primary,
-        backgroundColor: COLORS.primary + '10',
-    },
-    resendContainer: {
-        alignItems: 'center',
-        marginBottom: 24,
-    },
-    timerText: {
-        fontSize: SIZES.base,
-        fontFamily: FONTS.regular,
+        fontFamily: FONTS.medium,
         color: COLORS.textSecondary,
     },
-    timerNumber: {
-        fontFamily: FONTS.bold,
-        color: COLORS.primary,
-    },
-    resendLink: {
-        fontSize: SIZES.base,
-        fontFamily: FONTS.semiBold,
-        color: COLORS.primary,
-    },
-    inputGroup: {
-        marginBottom: 16,
-    },
-    label: {
-        fontSize: SIZES.base,
-        fontFamily: FONTS.semiBold,
-        color: COLORS.text,
-        marginBottom: 8,
-    },
-    inputContainer: {
+    newAccountButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: COLORS.background,
-        borderRadius: 14,
-        borderWidth: 2,
-        borderColor: COLORS.border,
-        paddingHorizontal: 16,
-        gap: 12,
-    },
-    input: {
-        flex: 1,
+        justifyContent: 'center',
+        backgroundColor: COLORS.primary + '10',
         paddingVertical: 16,
+        borderRadius: 16,
+        gap: 8,
+        borderWidth: 1.5,
+        borderColor: COLORS.primary + '30',
+    },
+    newAccountText: {
         fontSize: SIZES.base,
-        fontFamily: FONTS.regular,
-        color: COLORS.text,
+        fontFamily: FONTS.semiBold,
+        color: COLORS.primary,
     },
     backToLoginButton: {
         flexDirection: 'row',
@@ -619,5 +376,12 @@ const styles = StyleSheet.create({
         fontSize: SIZES.base,
         fontFamily: FONTS.medium,
         color: COLORS.primary,
+    },
+    urduText: {
+        writingDirection: 'rtl',
+        textAlign: 'right',
+    },
+    rtlInput: {
+        textAlign: 'right',
     },
 });

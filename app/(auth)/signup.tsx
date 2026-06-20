@@ -5,15 +5,13 @@ import { useRouter } from 'expo-router';
 import { COLORS, SIZES } from '@/constants/theme';
 
 /**
- * Signup redirect - now uses phone OTP authentication
- * This screen automatically redirects to the phone login flow
+ * Signup redirect - routes to the signup screen (complete-profile)
  */
 export default function Signup() {
     const router = useRouter();
 
     useEffect(() => {
-        // Redirect to phone login (which handles both login and signup)
-        router.replace('/(auth)/phone-login');
+        router.replace('/(auth)/complete-profile');
     }, []);
 
     return (

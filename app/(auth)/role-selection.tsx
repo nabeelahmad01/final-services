@@ -17,7 +17,7 @@ export default function WelcomeScreen() {
     };
 
     const handleGetStarted = () => {
-        router.push('/(auth)/phone-login');
+        router.push('/(auth)/complete-profile');
     };
 
     return (
@@ -137,12 +137,12 @@ export default function WelcomeScreen() {
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        onPress={() => router.push('/(auth)/login')}
+                        onPress={() => router.push('/(auth)/phone-login')}
                         style={styles.loginLink}
                     >
                         <Text style={[styles.loginText, isUrdu && styles.urduText]}>
                             {isUrdu ? 'پہلے سے اکاؤنٹ ہے؟ ' : 'Already have an account? '}
-                            <Text style={styles.loginTextBold}>{t('auth.login')}</Text>
+                            <Text style={styles.loginTextBold}>{isUrdu ? 'لاگ ان' : 'Login'}</Text>
                         </Text>
                     </TouchableOpacity>
                 </Animated.View>

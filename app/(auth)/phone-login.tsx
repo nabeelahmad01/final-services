@@ -15,24 +15,25 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { COLORS, SIZES, FONTS } from "@/constants/theme";
-import { sendOTP, isDevMode } from "@/services/firebase/phoneAuth";
+import { loginWithPhone } from "@/services/firebase/phoneAuth";
 import { useModal, showErrorModal } from "@/utils/modalService";
-import {
-  checkRateLimit,
-  recordAttempt,
-  recordSuccess,
-} from "@/utils/rateLimiter";
+import { useAuthStore } from "@/stores/authStore";
 import { validatePhone } from "@/utils/validation";
+import { useTranslation } from "react-i18next";
 
 export default function PhoneLoginScreen() {
   const router = useRouter();
+  const { t, i18n } = useTranslation();
+  const isUrdu = i18n.language === "ur";
   const { showModal } = useModal();
+  const { setUser } = useAuthStore();
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [countryCode] = useState("+92");
-  const [rateLimitMessage, setRateLimitMessage] = useState<string | null>(null);
 
-  const handleSendOTP = async () => {
+  const handleLogin = async () => {
     const cleanNumber = phoneNumber.replace(/\s/g, "");
 
     // Validate phone number
@@ -40,59 +41,51 @@ export default function PhoneLoginScreen() {
     if (!validation.isValid) {
       showErrorModal(
         showModal,
-        "Invalid Number",
-        validation.error || "Please enter a valid phone number"
+        t("common.error"),
+        t("errors.invalidPhone")
       );
       return;
     }
 
-    // Check rate limit
-    const rateCheck = await checkRateLimit("otp_request", cleanNumber);
-    if (!rateCheck.allowed) {
-      setRateLimitMessage(rateCheck.message);
-      showErrorModal(showModal, "Too Many Attempts", rateCheck.message);
+    if (!password || password.length < 6) {
+      showErrorModal(
+        showModal,
+        t("common.error"),
+        t("errors.passwordTooShort")
+      );
       return;
     }
 
-    setRateLimitMessage(null);
     setLoading(true);
-
-    // Record the attempt
-    await recordAttempt("otp_request", cleanNumber);
-
     try {
       const fullNumber = countryCode + cleanNumber.replace(/^0/, "");
-      const result = await sendOTP(fullNumber);
+      const result = await loginWithPhone(fullNumber, password);
 
-      if (result.success) {
-        // Clear rate limit on success
-        await recordSuccess("otp_request", cleanNumber);
+      if (result.success && result.user) {
+        setUser(result.user);
 
-        // Navigate to OTP verification screen
-        // In dev mode, OTP will be logged to console for testing
-        if (result.otp) {
-          console.log("🔐 Dev Mode OTP:", result.otp);
+        if (result.user.role === 'mechanic') {
+          router.replace('/(mechanic)/dashboard');
+        } else if (result.user.role === 'admin') {
+          router.replace('/(admin)/');
+        } else {
+          router.replace('/(customer)/home');
         }
-
-        router.push({
-          pathname: "/(auth)/verify-otp",
-          params: { phone: fullNumber },
-        });
       } else {
         showErrorModal(
           showModal,
-          "Error",
-          result.error || "Failed to send OTP"
+          t("common.error"),
+          result.error || t("auth.wrongPassword")
         );
       }
     } catch (error: any) {
-      showErrorModal(showModal, "Error", error.message);
+      showErrorModal(showModal, t("common.error"), error.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const formatPhoneNumber = (text: string) => {
+  const formatPhoneDisplay = (text: string) => {
     const cleaned = text.replace(/\D/g, "");
     let formatted = cleaned;
     if (cleaned.length > 3) {
@@ -128,64 +121,73 @@ export default function PhoneLoginScreen() {
               <Ionicons name="construct" size={48} color={COLORS.white} />
             </View>
             <Text style={styles.appName}>FixKar</Text>
-            <Text style={styles.tagline}>Your trusted service partner</Text>
+            <Text style={[styles.tagline, isUrdu && styles.urduText]}>
+              {isUrdu ? "آپ کی سروس، آپ کے دروازے پر" : "Your trusted service partner"}
+            </Text>
           </LinearGradient>
 
           <View style={styles.formContainer}>
-            <Text style={styles.title}>Login with Phone</Text>
-            <Text style={styles.subtitle}>
-              Enter your phone number to receive a verification code
+            <Text style={[styles.title, isUrdu && styles.urduText]}>
+              {t("auth.login")}
+            </Text>
+            <Text style={[styles.subtitle, isUrdu && styles.urduText]}>
+              {isUrdu ? "لاگ ان کرنے کے لیے اپنا فون نمبر اور پاس ورڈ درج کریں" : "Enter your phone number and password to login"}
             </Text>
 
+            {/* Phone Number Input */}
             <View style={styles.phoneInputContainer}>
               <View style={styles.countryCode}>
                 <Text style={styles.flag}>🇵🇰</Text>
                 <Text style={styles.countryCodeText}>{countryCode}</Text>
-                <Ionicons
-                  name="chevron-down"
-                  size={16}
-                  color={COLORS.textSecondary}
-                />
               </View>
               <TextInput
-                style={styles.phoneInput}
+                style={[styles.phoneInput, isUrdu && styles.rtlInput]}
                 placeholder="3XX XXX XXXX"
                 placeholderTextColor={COLORS.textSecondary}
                 value={phoneNumber}
-                onChangeText={formatPhoneNumber}
+                onChangeText={formatPhoneDisplay}
                 keyboardType="phone-pad"
                 maxLength={12}
-                autoFocus
               />
             </View>
 
-            <View style={styles.infoContainer}>
-              <Ionicons
-                name="information-circle-outline"
-                size={18}
-                color={COLORS.primary}
+            {/* Password Input */}
+            <View style={styles.passwordContainer}>
+              <Ionicons name="lock-closed-outline" size={20} color={COLORS.textSecondary} />
+              <TextInput
+                style={[styles.passwordInput, isUrdu && styles.rtlInput]}
+                placeholder={t("auth.password")}
+                placeholderTextColor={COLORS.textSecondary}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
               />
-              <Text style={styles.infoText}>
-                We'll send you a 6-digit code via SMS to verify your number
-              </Text>
+              <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                <Ionicons
+                  name={showPassword ? "eye-off" : "eye"}
+                  size={20}
+                  color={COLORS.textSecondary}
+                />
+              </TouchableOpacity>
             </View>
 
+            {/* Login Button */}
             <TouchableOpacity
               style={[
-                styles.sendButton,
-                phoneNumber.replace(/\s/g, "").length < 10 &&
-                  styles.sendButtonDisabled,
+                styles.loginButton,
+                (phoneNumber.replace(/\s/g, "").length < 10 || !password) &&
+                  styles.loginButtonDisabled,
               ]}
-              onPress={handleSendOTP}
-              disabled={loading || phoneNumber.replace(/\s/g, "").length < 10}
+              onPress={handleLogin}
+              disabled={loading || phoneNumber.replace(/\s/g, "").length < 10 || !password}
             >
               {loading ? (
                 <ActivityIndicator color={COLORS.white} />
               ) : (
                 <>
-                  <Text style={styles.sendButtonText}>Send OTP</Text>
+                  <Text style={styles.loginButtonText}>{t("auth.login")}</Text>
                   <Ionicons
-                    name="arrow-forward"
+                    name={isUrdu ? "arrow-back" : "arrow-forward"}
                     size={20}
                     color={COLORS.white}
                   />
@@ -193,11 +195,25 @@ export default function PhoneLoginScreen() {
               )}
             </TouchableOpacity>
 
-            <Text style={styles.termsText}>
-              By continuing, you agree to our{" "}
-              <Text style={styles.termsLink}>Terms of Service</Text> and{" "}
-              <Text style={styles.termsLink}>Privacy Policy</Text>
-            </Text>
+            {/* Forgot Password */}
+            <TouchableOpacity
+              style={styles.forgotButton}
+              onPress={() => router.push('/(auth)/forgot-password')}
+            >
+              <Text style={styles.forgotText}>{t("auth.forgotPassword")}</Text>
+            </TouchableOpacity>
+
+            {/* Signup Link */}
+            <View style={[styles.signupContainer, isUrdu && { flexDirection: "row-reverse" }]}>
+              <Text style={styles.signupText}>
+                {t("auth.dontHaveAccount")}{" "}
+              </Text>
+              <TouchableOpacity
+                onPress={() => router.push('/(auth)/complete-profile')}
+              >
+                <Text style={styles.signupLink}>{t("auth.signup")}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -245,6 +261,10 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     opacity: 0.9,
   },
+  urduText: {
+    writingDirection: "rtl",
+    textAlign: "right",
+  },
   formContainer: {
     flex: 1,
     padding: 24,
@@ -265,7 +285,7 @@ const styles = StyleSheet.create({
     fontSize: SIZES.base,
     fontFamily: FONTS.regular,
     color: COLORS.textSecondary,
-    marginBottom: 32,
+    marginBottom: 24,
     lineHeight: 22,
   },
   phoneInputContainer: {
@@ -304,23 +324,28 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     letterSpacing: 1,
   },
-  infoContainer: {
+  passwordContainer: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    backgroundColor: COLORS.primary + "10",
-    padding: 14,
-    borderRadius: 12,
+    alignItems: "center",
+    backgroundColor: COLORS.background,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: COLORS.border,
+    paddingHorizontal: 16,
     marginBottom: 24,
-    gap: 10,
+    gap: 12,
   },
-  infoText: {
+  passwordInput: {
     flex: 1,
-    fontSize: SIZES.sm,
-    fontFamily: FONTS.regular,
+    paddingVertical: 18,
+    fontSize: SIZES.base,
+    fontFamily: FONTS.medium,
     color: COLORS.text,
-    lineHeight: 20,
   },
-  sendButton: {
+  rtlInput: {
+    textAlign: "right",
+  },
+  loginButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -334,26 +359,39 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 6,
   },
-  sendButtonDisabled: {
+  loginButtonDisabled: {
     backgroundColor: COLORS.textSecondary,
     shadowOpacity: 0,
     elevation: 0,
   },
-  sendButtonText: {
+  loginButtonText: {
     fontSize: SIZES.lg,
     fontFamily: FONTS.bold,
     color: COLORS.white,
   },
-  termsText: {
-    fontSize: SIZES.sm,
+  forgotButton: {
+    alignItems: "center",
+    paddingVertical: 14,
+  },
+  forgotText: {
+    fontSize: SIZES.base,
+    fontFamily: FONTS.medium,
+    color: COLORS.primary,
+  },
+  signupContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 8,
+  },
+  signupText: {
+    fontSize: SIZES.base,
     fontFamily: FONTS.regular,
     color: COLORS.textSecondary,
-    textAlign: "center",
-    marginTop: 24,
-    lineHeight: 20,
   },
-  termsLink: {
+  signupLink: {
+    fontSize: SIZES.base,
+    fontFamily: FONTS.bold,
     color: COLORS.primary,
-    fontFamily: FONTS.medium,
   },
 });

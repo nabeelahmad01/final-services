@@ -30,6 +30,7 @@ import { ServiceCategory } from '@/types';
 import { MapView, Marker, PROVIDER_GOOGLE } from '@/utils/mapHelpers';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useModal, showErrorModal } from '@/utils/modalService';
+import { useTranslation } from 'react-i18next';
 
 // Time slots for selection
 const TIME_SLOTS = [
@@ -40,6 +41,8 @@ const TIME_SLOTS = [
 
 export default function ServiceRequest() {
     const router = useRouter();
+    const { t, i18n } = useTranslation();
+    const isUrdu = i18n.language === 'ur';
     const params = useLocalSearchParams();
     const category = (params.category as ServiceCategory) || 'car_mechanic';
     
@@ -317,7 +320,7 @@ export default function ServiceRequest() {
     // Image Picker Function
     const pickImages = async () => {
         if (selectedImages.length >= 3) {
-            showErrorModal(showModal, 'Limit Reached', 'Maximum 3 images allowed');
+            showErrorModal(showModal, t('common.error'), isUrdu ? 'زیادہ سے زیادہ 3 تصاویر اپ لوڈ کی جا سکتی ہیں' : 'Maximum 3 images allowed');
             return;
         }
 
@@ -336,7 +339,7 @@ export default function ServiceRequest() {
 
     const takePhoto = async () => {
         if (selectedImages.length >= 3) {
-            showErrorModal(showModal, 'Limit Reached', 'Maximum 3 images allowed');
+            showErrorModal(showModal, t('common.error'), isUrdu ? 'زیادہ سے زیادہ 3 تصاویر اپ لوڈ کی جا سکتی ہیں' : 'Maximum 3 images allowed');
             return;
         }
 
@@ -357,8 +360,8 @@ export default function ServiceRequest() {
         if (!description || !address) {
             showErrorModal(
                 showModal,
-                'Error',
-                'Please fill all fields and select location on map'
+                t('common.error'),
+                isUrdu ? 'براہ کرم تمام معلومات درج کریں اور نقشے پر مقام منتخب کریں' : 'Please fill all fields and select location on map'
             );
             return;
         }
@@ -366,8 +369,8 @@ export default function ServiceRequest() {
         if (isScheduled && !selectedTime) {
             showErrorModal(
                 showModal,
-                'Error',
-                'Please select a time for your scheduled request'
+                t('common.error'),
+                isUrdu ? 'براہ کرم شیڈول درخواست کے لیے وقت منتخب کریں' : 'Please select a time for your scheduled request'
             );
             return;
         }
@@ -375,8 +378,8 @@ export default function ServiceRequest() {
         if (!user) {
             showErrorModal(
                 showModal,
-                'Error',
-                'You must be logged in'
+                t('common.error'),
+                isUrdu ? 'آپ کا لاگ ان ہونا ضروری ہے' : 'You must be logged in'
             );
             return;
         }
@@ -392,10 +395,12 @@ export default function ServiceRequest() {
                     console.log('⚠️ Voice upload failed:', uploadError.message);
                     // Show warning but continue - don't block the request
                     showModal({
-                        title: 'Warning',
-                        message: 'Voice message could not be uploaded. Your request will be sent without it.',
+                        title: isUrdu ? 'انتباہ' : 'Warning',
+                        message: isUrdu 
+                            ? 'وائس پیغام اپ لوڈ نہیں ہو سکا۔ آپ کی درخواست وائس کے بغیر بھیج دی جائے گی۔' 
+                            : 'Voice message could not be uploaded. Your request will be sent without it.',
                         type: 'warning',
-                        buttons: [{ text: 'OK', style: 'default', onPress: () => {} }],
+                        buttons: [{ text: t('common.ok'), style: 'default', onPress: () => {} }],
                     });
                 }
             }
@@ -412,10 +417,12 @@ export default function ServiceRequest() {
                     console.log('⚠️ Image upload failed:', uploadError.message);
                     // Show warning but continue
                     showModal({
-                        title: 'Warning',
-                        message: 'Photos could not be uploaded. Your request will be sent without them.',
+                        title: isUrdu ? 'انتباہ' : 'Warning',
+                        message: isUrdu 
+                            ? 'تصاویر اپ لوڈ نہیں ہو سکیں۔ آپ کی درخواست تصاویر کے بغیر بھیج دی جائے گی۔' 
+                            : 'Photos could not be uploaded. Your request will be sent without them.',
                         type: 'warning',
-                        buttons: [{ text: 'OK', style: 'default', onPress: () => {} }],
+                        buttons: [{ text: t('common.ok'), style: 'default', onPress: () => {} }],
                     });
                 }
             }
@@ -460,14 +467,20 @@ export default function ServiceRequest() {
             }
 
             showModal({
-                title: isScheduled ? 'Request Scheduled' : 'Request Sent',
+                title: isScheduled 
+                    ? (isUrdu ? 'درخواست شیڈول ہو گئی' : 'Request Scheduled') 
+                    : (isUrdu ? 'درخواست بھیج دی گئی' : 'Request Sent'),
                 message: isScheduled 
-                    ? `Your request is scheduled for ${selectedDate.toLocaleDateString()} at ${selectedTime}. Mechanics will review it shortly.`
-                    : `Service request created! ${nearbyMechanics.length} mechanics notified.`,
+                    ? (isUrdu 
+                        ? `آپ کی درخواست ${selectedDate.toLocaleDateString()} کو ${selectedTime} کے لیے شیڈول کر دی گئی ہے۔ مستری جلد جائزہ لیں گے۔`
+                        : `Your request is scheduled for ${selectedDate.toLocaleDateString()} at ${selectedTime}. Mechanics will review it shortly.`)
+                    : (isUrdu 
+                        ? `سروس درخواست کامیابی سے بنائی گئی! ${nearbyMechanics.length} مستریوں کو مطلع کر دیا گیا ہے۔`
+                        : `Service request created! ${nearbyMechanics.length} mechanics notified.`),
                 type: 'success',
                 buttons: [
                     {
-                        text: 'View Proposals',
+                        text: isUrdu ? 'پیشکشیں دیکھیں' : 'View Proposals',
                         onPress: () => router.replace({
                             pathname: '/(customer)/proposals',
                             params: { requestId }
@@ -479,7 +492,7 @@ export default function ServiceRequest() {
         } catch (error: any) {
             showErrorModal(
                 showModal,
-                'Error',
+                t('common.error'),
                 error.message
             );
         } finally {
@@ -494,14 +507,16 @@ export default function ServiceRequest() {
                     <Input
                         value={address}
                         onChangeText={setAddress}
-                        placeholder="Enter your address"
+                        placeholder={isUrdu ? "اپنا پتہ درج کریں..." : "Enter your address"}
                     />
                     <TouchableOpacity
                         style={styles.getCurrentLocationBtn}
                         onPress={getCurrentLocation}
                     >
                         <Ionicons name="locate" size={20} color={COLORS.white} />
-                        <Text style={styles.getCurrentLocationText}>Use Current Location</Text>
+                        <Text style={styles.getCurrentLocationText}>
+                            {t('serviceRequest.currentLocation')}
+                        </Text>
                     </TouchableOpacity>
                 </View>
             );
@@ -511,7 +526,9 @@ export default function ServiceRequest() {
             return (
                 <View style={styles.mapPlaceholder}>
                     <ActivityIndicator size="large" color={COLORS.primary} />
-                    <Text style={styles.loadingText}>Getting your location...</Text>
+                    <Text style={styles.loadingText}>
+                        {isUrdu ? "آپ کا مقام تلاش کیا جا رہا ہے..." : "Getting your location..."}
+                    </Text>
                 </View>
             );
         }
@@ -519,7 +536,9 @@ export default function ServiceRequest() {
         if (!MapView) {
             return (
                 <View style={styles.mapPlaceholder}>
-                    <Text style={styles.loadingText}>Map not available</Text>
+                    <Text style={styles.loadingText}>
+                        {isUrdu ? "نقشہ دستیاب نہیں ہے" : "Map not available"}
+                    </Text>
                 </View>
             );
         }
@@ -540,7 +559,7 @@ export default function ServiceRequest() {
                     {Marker && (
                         <Marker
                             coordinate={location}
-                            title="Service Location"
+                            title={isUrdu ? "سروس کا مقام" : "Service Location"}
                             pinColor={COLORS.primary}
                         />
                     )}
@@ -550,18 +569,31 @@ export default function ServiceRequest() {
                 <View style={styles.searchOverlay}>
                     <GooglePlacesAutocomplete
                         ref={googlePlacesRef}
-                        placeholder="Search plaza, street, area..."
+                        placeholder={isUrdu ? "پتہ، گلی یا علاقہ تلاش کریں..." : "Search plaza, street, area..."}
                         fetchDetails={true}
                         listViewDisplayed={listViewDisplayed}
                         textInputProps={{
-                            onChangeText: () => setListViewDisplayed('auto'),
+                            onChangeText: (text) => {
+                                setListViewDisplayed('auto');
+                                setAddress(text); // Fallback: directly update manually typed address state
+                            },
+                            style: [
+                                {
+                                    backgroundColor: COLORS.surface,
+                                    color: COLORS.text,
+                                    fontSize: 16,
+                                    height: 44,
+                                    borderRadius: 12,
+                                    paddingLeft: 12,
+                                },
+                                isUrdu && { textAlign: 'right', paddingRight: 12 }
+                            ]
                         }}
                         onPress={handlePlaceSelect}
                         query={{
                             key: process.env.EXPO_PUBLIC_GOOGLE_API_KEY || '',
-                            language: 'en',
+                            language: isUrdu ? 'ur' : 'en',
                             components: 'country:pk', // Pakistan only
-                            // No types filter - show all places including plazas, buildings, streets
                             location: `${location.latitude},${location.longitude}`,
                             radius: 10000, // 10km radius bias
                             strictbounds: false, // Allow results outside but prioritize nearby
@@ -581,18 +613,12 @@ export default function ServiceRequest() {
                             textInputContainer: {
                                 backgroundColor: COLORS.surface,
                                 borderRadius: 12,
-                                paddingHorizontal: 12,
+                                paddingHorizontal: 4,
                                 shadowColor: '#000',
                                 shadowOffset: { width: 0, height: 2 },
                                 shadowOpacity: 0.15,
                                 shadowRadius: 8,
                                 elevation: 5,
-                            },
-                            textInput: {
-                                backgroundColor: COLORS.surface,
-                                color: COLORS.text,
-                                fontSize: 16,
-                                height: 44,
                             },
                             listView: {
                                 backgroundColor: COLORS.surface,
@@ -654,16 +680,18 @@ export default function ServiceRequest() {
                     keyboardShouldPersistTaps="handled"
                 >
                     {/* Header */}
-                    <View style={styles.header}>
+                    <View style={[styles.header, isUrdu && { flexDirection: 'row-reverse' }]}>
                         <TouchableOpacity onPress={() => router.back()}>
-                            <Ionicons name="arrow-back" size={24} color={COLORS.text} />
+                            <Ionicons name={isUrdu ? "arrow-forward" : "arrow-back"} size={24} color={COLORS.text} />
                         </TouchableOpacity>
-                        <Text style={styles.headerTitle}>Request Service</Text>
+                        <Text style={styles.headerTitle}>
+                            {t('serviceRequest.createRequest')}
+                        </Text>
                         <View style={{ width: 24 }} />
                     </View>
 
                     {/* Category Display */}
-                    <View style={styles.categoryCard}>
+                    <View style={[styles.categoryCard, isUrdu && { flexDirection: 'row-reverse' }]}>
                         <View
                             style={[
                                 styles.categoryIcon,
@@ -676,14 +704,18 @@ export default function ServiceRequest() {
                                 color={categoryInfo?.color}
                             />
                         </View>
-                        <View>
-                            <Text style={styles.categoryLabel}>Service Category</Text>
-                            <Text style={styles.categoryName}>{categoryInfo?.name}</Text>
+                        <View style={isUrdu && { alignItems: 'flex-end' }}>
+                            <Text style={[styles.categoryLabel, isUrdu && styles.urduText]}>
+                                {isUrdu ? "سروس کیٹیگری" : "Service Category"}
+                            </Text>
+                            <Text style={[styles.categoryName, isUrdu && styles.urduText]}>
+                                {isUrdu && categoryInfo?.urdu ? categoryInfo.urdu : categoryInfo?.name}
+                            </Text>
                         </View>
                     </View>
 
                     {/* Scheduling Toggle */}
-                    <View style={styles.scheduleToggleContainer}>
+                    <View style={[styles.scheduleToggleContainer, isUrdu && { flexDirection: 'row-reverse' }]}>
                         <TouchableOpacity
                             style={[styles.toggleButton, !isScheduled && styles.toggleButtonActive]}
                             onPress={() => setIsScheduled(false)}
@@ -694,7 +726,7 @@ export default function ServiceRequest() {
                                 color={!isScheduled ? COLORS.white : COLORS.textSecondary}
                             />
                             <Text style={[styles.toggleText, !isScheduled && styles.toggleTextActive]}>
-                                Immediate
+                                {isUrdu ? "فوری سروس" : "Immediate"}
                             </Text>
                         </TouchableOpacity>
                         <TouchableOpacity
@@ -707,7 +739,7 @@ export default function ServiceRequest() {
                                 color={isScheduled ? COLORS.white : COLORS.textSecondary}
                             />
                             <Text style={[styles.toggleText, isScheduled && styles.toggleTextActive]}>
-                                Schedule for Later
+                                {t('home.scheduleLater')}
                             </Text>
                         </TouchableOpacity>
                     </View>
@@ -720,11 +752,13 @@ export default function ServiceRequest() {
                                 style={styles.datePickerButton}
                                 onPress={() => setShowDatePicker(true)}
                             >
-                                <View style={styles.pickerRow}>
-                                    <View>
-                                        <Text style={styles.pickerLabel}>Date</Text>
+                                <View style={[styles.pickerRow, isUrdu && { flexDirection: 'row-reverse' }]}>
+                                    <View style={isUrdu && { alignItems: 'flex-end' }}>
+                                        <Text style={styles.pickerLabel}>
+                                            {isUrdu ? "تاریخ" : "Date"}
+                                        </Text>
                                         <Text style={styles.pickerValue}>
-                                            {selectedDate.toLocaleDateString('en-PK', {
+                                            {selectedDate.toLocaleDateString(isUrdu ? 'ur-PK' : 'en-PK', {
                                                 month: 'short', day: 'numeric', year: 'numeric'
                                             })}
                                         </Text>
@@ -745,7 +779,9 @@ export default function ServiceRequest() {
                             )}
 
                             {/* Time Slots */}
-                            <Text style={styles.timeLabel}>Select Time</Text>
+                            <Text style={[styles.timeLabel, isUrdu && styles.urduText]}>
+                                {isUrdu ? "وقت منتخب کریں" : "Select Time"}
+                            </Text>
                             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.timeScroll}>
                                 {TIME_SLOTS.map((time) => (
                                     <TouchableOpacity
@@ -773,7 +809,9 @@ export default function ServiceRequest() {
 
                     {/* Map with Search */}
                     <View style={styles.mapSection}>
-                        <Text style={styles.sectionLabel}>Service Location</Text>
+                        <Text style={[styles.sectionLabel, isUrdu && styles.urduText]}>
+                            {t('serviceRequest.selectLocation')}
+                        </Text>
                         <View style={styles.mapContainer}>
                             {renderMap()}
                         </View>
@@ -781,34 +819,36 @@ export default function ServiceRequest() {
 
                     {/* Address Display */}
                     {address ? (
-                        <View style={styles.addressCard}>
+                        <View style={[styles.addressCard, isUrdu && { flexDirection: 'row-reverse' }]}>
                             <Ionicons name="location" size={20} color={COLORS.primary} />
-                            <Text style={styles.addressText}>{address}</Text>
+                            <Text style={[styles.addressText, isUrdu && styles.urduText]}>{address}</Text>
                         </View>
                     ) : null}
 
                     {/* Description Input */}
                     <View style={styles.form}>
                         <View style={styles.inputContainer}>
-                            <Text style={styles.label}>Description</Text>
+                            <Text style={[styles.label, isUrdu && styles.urduText]}>
+                                {isUrdu ? "مسئلے کی تفصیل" : "Description"}
+                            </Text>
                             <Input
-                                placeholder="Describe the issue or service needed..."
+                                placeholder={t('serviceRequest.describeIssue')}
                                 value={description}
                                 onChangeText={setDescription}
-                                style={styles.textArea}
+                                style={[styles.textArea, isUrdu && styles.rtlInput]}
                                 multiline
                             />
                         </View>
 
                         {/* Voice Recording Section */}
                         <View style={styles.mediaSection}>
-                            <Text style={styles.mediaSectionTitle}>
-                                🎤 Voice Message (Optional)
+                            <Text style={[styles.mediaSectionTitle, isUrdu && styles.urduText]}>
+                                {isUrdu ? "🎤 وائس پیغام (اختیاری)" : "🎤 Voice Message (Optional)"}
                             </Text>
                             
                             {!recordingUri ? (
                                 <TouchableOpacity
-                                    style={[styles.recordButton, isRecording && styles.recordingActive]}
+                                    style={[styles.recordButton, isRecording && styles.recordingActive, isUrdu && { flexDirection: 'row-reverse' }]}
                                     onPress={isRecording ? stopRecording : startRecording}
                                 >
                                     <Ionicons
@@ -817,11 +857,13 @@ export default function ServiceRequest() {
                                         color={isRecording ? COLORS.white : COLORS.primary}
                                     />
                                     <Text style={[styles.recordButtonText, isRecording && styles.recordingText]}>
-                                        {isRecording ? `Recording... ${recordingDuration}s` : 'Tap to Record'}
+                                        {isRecording 
+                                            ? (isUrdu ? `ریکارڈنگ جاری ہے... ${recordingDuration}s` : `Recording... ${recordingDuration}s`) 
+                                            : (isUrdu ? 'ریکارڈ کرنے کے لیے دبائیں' : 'Tap to Record')}
                                     </Text>
                                 </TouchableOpacity>
                             ) : (
-                                <View style={styles.recordingPreview}>
+                                <View style={[styles.recordingPreview, isUrdu && { flexDirection: 'row-reverse' }]}>
                                     <TouchableOpacity
                                         style={styles.playButton}
                                         onPress={isPlaying ? stopPlayback : playRecording}
@@ -832,8 +874,8 @@ export default function ServiceRequest() {
                                             color={COLORS.white}
                                         />
                                     </TouchableOpacity>
-                                    <Text style={styles.durationText}>
-                                        Voice recorded ({recordingDuration}s)
+                                    <Text style={[styles.durationText, isUrdu && styles.urduText]}>
+                                        {isUrdu ? `آواز ریکارڈ ہو گئی (${recordingDuration}s)` : `Voice recorded (${recordingDuration}s)`}
                                     </Text>
                                     <TouchableOpacity onPress={deleteRecording}>
                                         <Ionicons name="trash-outline" size={20} color={COLORS.danger} />
@@ -844,18 +886,22 @@ export default function ServiceRequest() {
 
                         {/* Image Picker Section */}
                         <View style={styles.mediaSection}>
-                            <Text style={styles.mediaSectionTitle}>
-                                📷 Photos (Optional, max 3)
+                            <Text style={[styles.mediaSectionTitle, isUrdu && styles.urduText]}>
+                                {isUrdu ? "📷 تصاویر (اختیاری، حد 3)" : "📷 Photos (Optional, max 3)"}
                             </Text>
                             
                             <View style={styles.imagePickerButtons}>
-                                <TouchableOpacity style={styles.imagePickerButton} onPress={takePhoto}>
+                                <TouchableOpacity style={[styles.imagePickerButton, isUrdu && { flexDirection: 'row-reverse' }]} onPress={takePhoto}>
                                     <Ionicons name="camera" size={22} color={COLORS.primary} />
-                                    <Text style={styles.imagePickerText}>Camera</Text>
+                                    <Text style={styles.imagePickerText}>
+                                        {isUrdu ? "کیمرہ" : "Camera"}
+                                    </Text>
                                 </TouchableOpacity>
-                                <TouchableOpacity style={styles.imagePickerButton} onPress={pickImages}>
+                                <TouchableOpacity style={[styles.imagePickerButton, isUrdu && { flexDirection: 'row-reverse' }]} onPress={pickImages}>
                                     <Ionicons name="images" size={22} color={COLORS.primary} />
-                                    <Text style={styles.imagePickerText}>Gallery</Text>
+                                    <Text style={styles.imagePickerText}>
+                                        {isUrdu ? "گیلری" : "Gallery"}
+                                    </Text>
                                 </TouchableOpacity>
                             </View>
 
@@ -876,25 +922,32 @@ export default function ServiceRequest() {
                             )}
                         </View>
 
-                        <View style={styles.infoCard}>
+                        <View style={[styles.infoCard, isUrdu && { flexDirection: 'row-reverse' }]}>
                             <Ionicons name="information-circle" size={24} color={COLORS.primary} />
-                            <Text style={styles.infoText}>
+                            <Text style={[styles.infoText, isUrdu && styles.urduText]}>
                                 {isScheduled 
-                                    ? `Mechanics will receive your request for ${selectedDate.toLocaleDateString()} and send proposals.`
-                                    : "Mechanics in your area will receive this request and send proposals with their pricing and availability."
+                                    ? (isUrdu 
+                                        ? `مستریوں کو آپ کی درخواست ${selectedDate.toLocaleDateString()} کے لیے موصول ہوگی اور وہ پیشکشیں بھیجیں گے۔`
+                                        : `Mechanics will receive your request for ${selectedDate.toLocaleDateString()} and send proposals.`)
+                                    : (isUrdu 
+                                        ? "آپ کے علاقے کے مستریوں کو یہ درخواست موصول ہوگی اور وہ اپنی قیمت اور دستیابی کے ساتھ پیشکشیں بھیجیں گے۔"
+                                        : "Mechanics in your area will receive this request and send proposals with their pricing and availability.")
                                 }
                             </Text>
                         </View>
 
                         <Button
-                            title={isScheduled ? "Schedule Request" : "Submit Request"}
+                            title={isScheduled 
+                                ? (isUrdu ? "درخواست شیڈول کریں" : "Schedule Request") 
+                                : t('serviceRequest.submitRequest')
+                            }
                             onPress={handleSubmit}
                             loading={loading}
                             style={styles.submitButton}
                         />
 
                         <Button
-                            title="Cancel"
+                            title={t('common.cancel')}
                             onPress={() => router.push('/(customer)/home')}
                             variant="outline"
                         />
@@ -1266,5 +1319,12 @@ const styles = StyleSheet.create({
         right: -8,
         backgroundColor: COLORS.white,
         borderRadius: 12,
+    },
+    urduText: {
+        writingDirection: 'rtl',
+        textAlign: 'right',
+    },
+    rtlInput: {
+        textAlign: 'right',
     },
 });
